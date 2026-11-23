@@ -1,11 +1,19 @@
+VCPlay is an enhanced fork of [tc-play](https://github.com/bwalex/tc-play),
+built on [Alex Hornung](https://github.com/bwalex)’s original codebase.
+It supports a wider range of VeraCrypt volumes and better protects hidden
+volumes from accidental overwrites.
+
 Acknowledgments
 ==========
 
-Special thanks to [Alex Hornung](https://github.com/bwalex) for creating
-[tc-play](https://github.com/bwalex/tc-play) and for the years he devoted to
-maintaining it. Behind the simplicity of opening an encrypted volume with a
+Special thanks to Alex Hornung for the years he devoted to developing and
+maintaining the original software.
+Behind the simplicity of opening an encrypted volume with a
 single command are countless hours of patient, thoughtful work. This fork owes
 its existence to that dedication and to Alex’s generosity in sharing his work.
+
+VCPlay will stay simple KISS, easy to use, and portable across operating
+systems and hardware architectures.
 
 VeraCrypt has continued to evolve in the years since the last tc-play release.
 VCPlay was started to keep pace with those changes while preserving support for
