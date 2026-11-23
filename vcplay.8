@@ -30,10 +30,10 @@
 .\" SUCH DAMAGE.
 .\"
 .Dd December 8, 2013
-.Dt TCPLAY 8
+.Dt VCPLAY 8
 .Os
 .Sh NAME
-.Nm tcplay
+.Nm vcplay
 .Nd tool to manage TrueCrypt volumes
 .Sh SYNOPSIS
 .Nm
@@ -122,7 +122,7 @@ Print help message and exit.
 Print out information about the encrypted device specified by
 .Fl -device .
 .It Fl j Ar mapping , Fl -info-mapped Ns = Ns Ar mapping
-Print out information about the mapped tcplay volume specified
+Print out information about the mapped vcplay volume specified
 by
 .Ar mapping .
 Information such as key CRC and the PBKDF2 PRF is not available
@@ -592,7 +592,7 @@ option.
 .Pp
 A disk encrypted using full disk encryption can be mapped using
 .Bd -ragged -offset indent
-.Nm Fl -map Ns = Ns Cm tcplay_sdb
+.Nm Fl -map Ns = Ns Cm vcplay_sdb
 .Fl -device Ns = Ns Cm /dev/sdb
 .Fl -fde
 .Ed
@@ -601,7 +601,7 @@ To access individual partitions on the now mapped disk,
 the following command will generate mappings for each
 individual partition on the encrypted disk:
 .Bd -ragged -offset indent
-.Sy kpartx Fl -av Cm /dev/mapper/tcplay_sdb
+.Sy kpartx Fl -av Cm /dev/mapper/vcplay_sdb
 .Ed
 .Pp
 To restore the main volume header from the backup header, the following
@@ -654,8 +654,8 @@ main header will be used instead.
 .Xr dmsetup 8 ,
 .Xr kpartx 8
 .Sh HISTORY
-The
-.Nm
+The original
+.Ic tcplay
 utility appeared in
 .Dx 2.11 .
 .Sh AUTHORS

@@ -37,7 +37,7 @@
 #include <signal.h>
 #include <time.h>
 
-#include "tcplay.h"
+#include "vcplay.h"
 
 #ifndef SIGINFO
 #define SIGINFO SIGUSR1
@@ -71,24 +71,24 @@ void
 usage(void)
 {
 	fprintf(stderr,
-	    "usage: tcplay -c -d device [--pim=N] [-g [--pim-hidden=N]] [-z] [-w]\n"
+	    "usage: vcplay -c -d device [--pim=N] [-g [--pim-hidden=N]] [-z] [-w]\n"
 	    "              [-a pbkdf_hash] [-b cipher]\n"
 	    "              [-f keyfile_hidden] [-k keyfile] [-x pbkdf_hash] [-y cipher]\n"
-	    "       tcplay -i -d device [-e [--pim-hidden=N]] [-p] [-f keyfile_hidden] [-k keyfile]\n"
+	    "       vcplay -i -d device [-e [--pim-hidden=N]] [-p] [-f keyfile_hidden] [-k keyfile]\n"
 	    "              [-s system_device] [--fde] [--pim=N] [--use-backup]\n"
 	    "              [--use-hdr-file=hdr_file] [--use-hidden-hdr-file=hdr_file]\n"
-	    "       tcplay -m mapping -d device [-e [--pim-hidden=N]] [-p] [-f keyfile_hidden] [-k keyfile]\n"
+	    "       vcplay -m mapping -d device [-e [--pim-hidden=N]] [-p] [-f keyfile_hidden] [-k keyfile]\n"
 	    "              [-s system_device] [--fde] [--pim=N] [--use-backup] [--allow-trim]\n"
 	    "              [--use-hdr-file=hdr_file] [--use-hidden-hdr-file=hdr_file]\n"
-	    "       tcplay --modify -d device [--pim=N] [--new-pim=N] [-k keyfile]\n"
+	    "       vcplay --modify -d device [--pim=N] [--new-pim=N] [-k keyfile]\n"
 	    "              [--new-keyfile=keyfile] [--new-pbkdf-prf=pbkdf_hash]\n"
 	    "              [-s system_device] [--fde]\n"
 	    "              [--use-backup] [--save-hdr-backup=hdr_file] [-w]\n"
 	    "              [--use-hdr-file=hdr_file] [--use-hidden-hdr-file=hdr_file]\n"
-	    "       tcplay --modify -d device [--pim=N] [-k keyfile] --restore-from-backup-hdr [-w]\n"
-	    "       tcplay -j mapping\n"
-	    "       tcplay -u mapping\n"
-	    "       tcplay -h | -v\n"
+	    "       vcplay --modify -d device [--pim=N] [-k keyfile] --restore-from-backup-hdr [-w]\n"
+	    "       vcplay -j mapping\n"
+	    "       vcplay -u mapping\n"
+	    "       vcplay -h | -v\n"
 	    "\n"
 	    "Valid commands are:\n"
 	    " -c, --create\n"
@@ -275,14 +275,14 @@ static struct option longopts[] = {
 int
 main(int argc, char *argv[])
 {
-	struct tcplay_opts *opts;
+	struct vcplay_opts *opts;
 	int ch, error;
 	long arg_pim = -1;
 	int info_vol = 0, map_vol = 0,
 	    unmap_vol = 0, info_map = 0,
 	    create_vol = 0, modify_vol = 0;
 
-	if ((error = tc_play_init()) != 0) {
+	if ((error = vc_play_init()) != 0) {
 		fprintf(stderr, "Initialization failed, exiting.");
 		exit(EXIT_FAILURE);
 	}
@@ -373,7 +373,7 @@ main(int argc, char *argv[])
 			_set_str_opt(map_name);
 			break;
 		case 'v':
-			printf("tcplay v%d.%d\n", MAJ_VER, MIN_VER);
+			printf("vcplay v%d.%d\n", MAJ_VER, MIN_VER);
 			exit(EXIT_SUCCESS);
 			/* NOT REACHED */
 		case 'w':

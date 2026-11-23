@@ -3,15 +3,15 @@
 #include <string.h>
 #include <assert.h>
 
-#include "tcplay_api.h"
+#include "vcplay_api.h"
 
 int
 main(void)
 {
-	tc_api_opts api_opts;
+	vc_api_opts api_opts;
 	int error;
 
-	error = tc_api_init(/* verbose */1);
+	error = vc_api_init(/* verbose */1);
 	assert(error == 0);
 
 	memset(&api_opts, 0, sizeof(api_opts));
@@ -26,15 +26,15 @@ main(void)
 	api_opts.tc_prf_hash = "whirlpool";
 	api_opts.tc_prf_hash_hidden = "RIPEMD160";
 
-	error = tc_api_create_volume(&api_opts);
+	error = vc_api_create_volume(&api_opts);
 	if (error)
-		printf("API ERROR: %s\n", tc_api_get_error_msg());
+		printf("API ERROR: %s\n", vc_api_get_error_msg());
 	assert(error == 0);
 
-	error = tc_api_uninit();
+	error = vc_api_uninit();
 	assert(error == 0);
 
-	error = tc_api_init(/*verbose */ 1);
+	error = vc_api_init(/*verbose */ 1);
 	assert(error == 0);
 
 	api_opts.tc_passphrase = NULL;
@@ -42,15 +42,15 @@ main(void)
 	api_opts.tc_password_retries = 5;
 	api_opts.tc_interactive_prompt = 1;
 	api_opts.tc_prompt_timeout = 5;
-	error = tc_api_map_volume(&api_opts);
+	error = vc_api_map_volume(&api_opts);
 	if (error)
-		printf("API MAP ERROR: %s\n", tc_api_get_error_msg());
+		printf("API MAP ERROR: %s\n", vc_api_get_error_msg());
 	assert(error == 0);
 
 	system("dmsetup ls");
-	tc_api_unmap_volume(&api_opts);
+	vc_api_unmap_volume(&api_opts);
 
-	error = tc_api_uninit();
+	error = vc_api_uninit();
 	assert(error == 0);
 
 	return 0;

@@ -42,7 +42,7 @@
 #include <string.h>
 
 #include "crc32.h"
-#include "tcplay.h"
+#include "vcplay.h"
 
 /* Endianess macros */
 #define BE_TO_HOST(n, v) v = be ## n ## toh(v)
@@ -305,7 +305,7 @@ error:
 }
 
 struct tchdr_enc *copy_reencrypt_hdr(unsigned char *pass, int passlen,
-    struct pbkdf_prf_algo *prf_algo, int weak, struct tcplay_info *info,
+    struct pbkdf_prf_algo *prf_algo, int weak, struct vcplay_info *info,
     struct tchdr_enc **backup_hdr)
 {
 	struct tchdr_enc *ehdr, *ehdr_backup;

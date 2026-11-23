@@ -34,29 +34,29 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#include "tcplay.h"
-#include "tcplay_api.h"
-#include "tcplay_api_internal.h"
+#include "vcplay.h"
+#include "vcplay_api.h"
+#include "vcplay_api_internal.h"
 
 
 int
-tc_api_init(int verbose)
+vc_api_init(int verbose)
 {
 	int error;
 
 	tc_internal_verbose = verbose;
 
-	if ((error = tc_play_init()) != 0)
-		return TC_ERR;
+	if ((error = vc_play_init()) != 0)
+		return VC_ERR;
 	else
-		return TC_OK;
+		return VC_OK;
 }
 
 int
-tc_api_uninit(void)
+vc_api_uninit(void)
 {
 	check_and_purge_safe_mem();
-	return TC_OK;
+	return VC_OK;
 }
 
 
@@ -69,21 +69,21 @@ static const char *_caps[] = {
 };
 
 int
-tc_api_has(const char *feature)
+vc_api_has(const char *feature)
 {
 	const char *cap;
 	int i;
 
 	for (cap = _caps[0], i = 0; cap != NULL; cap = _caps[++i]) {
 		if ((strcmp(cap, feature)) == 0)
-			return TC_OK;
+			return VC_OK;
 	}
 
-	return TC_ERR_UNIMPL;
+	return VC_ERR_UNIMPL;
 }
 
 int
-tc_api_cipher_iterate(tc_api_cipher_iterator_fn fn, void *priv)
+vc_api_cipher_iterate(vc_api_cipher_iterator_fn fn, void *priv)
 {
 	int i;
 	struct tc_cipher_chain *chain;
@@ -93,7 +93,7 @@ tc_api_cipher_iterate(tc_api_cipher_iterator_fn fn, void *priv)
 
 	if (fn == NULL) {
 		errno = EFAULT;
-		return TC_ERR;
+		return VC_ERR;
 	}
 
 	for (i = 0, chain = tc_cipher_chains[0]; chain != NULL;
@@ -105,17 +105,17 @@ tc_api_cipher_iterate(tc_api_cipher_iterator_fn fn, void *priv)
 			break;
 	}
 
-	return TC_OK;
+	return VC_OK;
 }
 
 int
-tc_api_prf_iterate(tc_api_prf_iterator_fn fn, void *priv)
+vc_api_prf_iterate(vc_api_prf_iterator_fn fn, void *priv)
 {
 	int i;
 
 	if (fn == NULL) {
 		errno = EFAULT;
-		return TC_ERR;
+		return VC_ERR;
 	}
 
 	for (i = 0; pbkdf_prf_algos[i].name != NULL; i++) {
@@ -127,12 +127,12 @@ tc_api_prf_iterate(tc_api_prf_iterator_fn fn, void *priv)
 			break;
 	}
 
-	return TC_OK;
+	return VC_OK;
 }
 
 
 const char *
-tc_api_task_get_error(tc_api_task task __unused)
+vc_api_task_get_error(vc_api_task task __unused)
 {
 	return tc_internal_log_buffer;
 }
@@ -140,10 +140,10 @@ tc_api_task_get_error(tc_api_task task __unused)
 
 #define _match(k, v) (strcmp(k, v) == 0)
 
-tc_api_task
-tc_api_task_init(const char *op)
+vc_api_task
+vc_api_task_init(const char *op)
 {
-	tc_api_task task = NULL;
+	vc_api_task task = NULL;
 	int fail = 1;
 
 	if ((task = alloc_safe_mem(sizeof(*task))) == NULL) {
@@ -188,14 +188,14 @@ out:
 }
 
 int
-tc_api_task_uninit(tc_api_task task)
+vc_api_task_uninit(vc_api_task task)
 {
 	if (task->last_info != NULL)
 		free_info(task->last_info);
 	opts_free(task->opts);
 	free_safe_mem(task);
 
-	return TC_OK;
+	return VC_OK;
 }
 
 
@@ -203,7 +203,7 @@ tc_api_task_uninit(tc_api_task task)
 	do {							\
 		if ((opts->k = strdup_safe_mem(s)) == NULL) {	\
 			errno = ENOMEM;				\
-			r = TC_ERR;				\
+			r = VC_ERR;				\
 			goto out;				\
 		}						\
 	} while (0)
@@ -216,20 +216,20 @@ tc_api_task_uninit(tc_api_task task)
 	} while (0)
 
 int
-tc_api_task_set(tc_api_task task, const char *key, ...)
+vc_api_task_set(vc_api_task task, const char *key, ...)
 {
-	struct tcplay_opts *opts;
+	struct vcplay_opts *opts;
 	va_list ap;
 	const char *s;
 	int64_t i64;
 	int i;
-	tc_api_state_change_fn sc_fn;
+	vc_api_state_change_fn sc_fn;
 	void *vp;
-	int r = TC_OK;
+	int r = VC_OK;
 
 	if (task == NULL || key == NULL || ((opts = task->opts) == NULL)) {
 		errno = EFAULT;
-		return TC_ERR;
+		return VC_ERR;
 	}
 
 	va_start(ap, key);
@@ -262,7 +262,7 @@ tc_api_task_set(tc_api_task task, const char *key, ...)
 
 		if (pim < 0 || pim > MAX_PIM_VALUE || option == NULL) {
 			errno = EINVAL;
-			r = TC_ERR;
+			r = VC_ERR;
 		} else {
 			*option = pim;
 		}
@@ -391,7 +391,7 @@ tc_api_task_set(tc_api_task task, const char *key, ...)
 		if (s != NULL) {
 			if ((opts->prf_algo = check_prf_algo(s, 0, 1)) == NULL) {
 				errno = ENOENT;
-				r = TC_ERR;
+				r = VC_ERR;
 				goto out;
 			}
 		} else {
@@ -402,7 +402,7 @@ tc_api_task_set(tc_api_task task, const char *key, ...)
 		if (s != NULL) {
 			if ((opts->h_prf_algo = check_prf_algo(s, 0, 1)) == NULL) {
 				errno = ENOENT;
-				r = TC_ERR;
+				r = VC_ERR;
 				goto out;
 			}
 		} else {
@@ -413,7 +413,7 @@ tc_api_task_set(tc_api_task task, const char *key, ...)
 		if (s != NULL) {
 			if ((opts->new_prf_algo = check_prf_algo(s, 0, 1)) == NULL) {
 				errno = ENOENT;
-				r = TC_ERR;
+				r = VC_ERR;
 				goto out;
 			}
 		} else {
@@ -424,7 +424,7 @@ tc_api_task_set(tc_api_task task, const char *key, ...)
 		if (s != NULL) {
 			if ((opts->cipher_chain = check_cipher_chain(s, 1)) == NULL) {
 				errno = ENOENT;
-				r = TC_ERR;
+				r = VC_ERR;
 				goto out;
 			}
 		} else {
@@ -435,19 +435,19 @@ tc_api_task_set(tc_api_task task, const char *key, ...)
 		if (s != NULL) {
 			if ((opts->h_cipher_chain = check_cipher_chain(s, 1)) == NULL) {
 				errno = ENOENT;
-				r = TC_ERR;
+				r = VC_ERR;
 				goto out;
 			}
 		} else {
 			opts->h_cipher_chain = NULL;
 		}
 	} else if (_match(key, "state_change_fn")) {
-		sc_fn = va_arg(ap, tc_api_state_change_fn);
+		sc_fn = va_arg(ap, vc_api_state_change_fn);
 		opts->state_change_fn = sc_fn;
 		vp = va_arg(ap, void *);
 		opts->api_ctx = vp;
 	} else {
-		r = TC_ERR_UNIMPL;
+		r = VC_ERR_UNIMPL;
 	}
 
 out:
@@ -478,7 +478,7 @@ out:
 
 static
 int
-_opts_check_create(struct tcplay_opts *opts)
+_opts_check_create(struct vcplay_opts *opts)
 {
 	_not_null(dev);
 	_not_set(SYS);
@@ -505,7 +505,7 @@ _opts_check_create(struct tcplay_opts *opts)
 
 static
 int
-_opts_check_map(struct tcplay_opts *opts)
+_opts_check_map(struct vcplay_opts *opts)
 {
 	_not_null(dev);
 	_not_null(map_name);
@@ -531,7 +531,7 @@ _opts_check_map(struct tcplay_opts *opts)
 
 static
 int
-_opts_check_unmap(struct tcplay_opts *opts)
+_opts_check_unmap(struct vcplay_opts *opts)
 {
 	_not_null(map_name);
 	/* XXX: _not_null(dev); ? */
@@ -562,7 +562,7 @@ _opts_check_unmap(struct tcplay_opts *opts)
 
 static
 int
-_opts_check_info(struct tcplay_opts *opts)
+_opts_check_info(struct vcplay_opts *opts)
 {
 	_not_null(dev);
 	_null(map_name);
@@ -588,7 +588,7 @@ _opts_check_info(struct tcplay_opts *opts)
 
 static
 int
-_opts_check_info_mapped(struct tcplay_opts *opts)
+_opts_check_info_mapped(struct vcplay_opts *opts)
 {
 	_not_null(map_name);
 	/* XXX: _not_null(dev); ? */
@@ -619,7 +619,7 @@ _opts_check_info_mapped(struct tcplay_opts *opts)
 
 static
 int
-_opts_check_modify(struct tcplay_opts *opts)
+_opts_check_modify(struct vcplay_opts *opts)
 {
 	_not_null(dev);
 	_null(map_name);
@@ -641,7 +641,7 @@ _opts_check_modify(struct tcplay_opts *opts)
 
 static
 int
-_opts_check_restore(struct tcplay_opts *opts)
+_opts_check_restore(struct vcplay_opts *opts)
 {
 	if ((_opts_check_modify(opts)) < 0)
 		return -1;
@@ -654,14 +654,14 @@ _opts_check_restore(struct tcplay_opts *opts)
 }
 
 int
-tc_api_task_do(tc_api_task task)
+vc_api_task_do(vc_api_task task)
 {
-	struct tcplay_opts *opts;
-	int r = TC_OK;
+	struct vcplay_opts *opts;
+	int r = VC_OK;
 
 	if (task == NULL || ((opts = task->opts) == NULL)) {
 		errno = EFAULT;
-		return TC_ERR;
+		return VC_ERR;
 	}
 
 	if (task->last_info != NULL) {
@@ -699,7 +699,7 @@ tc_api_task_do(tc_api_task task)
 			return r;
 		}
 		if ((task->last_info = info_map_common(opts, NULL)) == NULL) {
-			r = TC_ERR;
+			r = VC_ERR;
 		}
 		break;
 
@@ -709,7 +709,7 @@ tc_api_task_do(tc_api_task task)
 			return r;
 		}
 		if ((task->last_info = dm_info_map(opts->map_name)) == NULL) {
-			r = TC_ERR;
+			r = VC_ERR;
 		}
 		break;
 
@@ -737,27 +737,27 @@ tc_api_task_do(tc_api_task task)
 
 
 int
-tc_api_task_info_get(tc_api_task task, const char *key, ...)
+vc_api_task_info_get(vc_api_task task, const char *key, ...)
 {
 	char buf[1024];
 	va_list ap;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	char *s;
 	int *ip;
 	int64_t *i64p;
-	int r = TC_OK;
+	int r = VC_OK;
 	size_t sz;
 
 	if (task == NULL || ((info = task->last_info) == NULL)) {
 		errno = EFAULT;
-		return TC_ERR;
+		return VC_ERR;
 	}
 
 	va_start(ap, key);
 	sz = va_arg(ap, size_t);
 	if (sz < 1) {
 		errno = EINVAL;
-		r = TC_ERR;
+		r = VC_ERR;
 		goto out;
 	}
 
@@ -780,7 +780,7 @@ tc_api_task_info_get(tc_api_task task, const char *key, ...)
 	} else if (_match(key, "key_bits")) {
 		if (sz != sizeof(int)) {
 			errno = EFAULT;
-			r = TC_ERR;
+			r = VC_ERR;
 			goto out;
 		}
 		ip = va_arg(ap, int *);
@@ -788,7 +788,7 @@ tc_api_task_info_get(tc_api_task task, const char *key, ...)
 	} else if (_match(key, "size")) {
 		if (sz != sizeof(int64_t)) {
 			errno = EFAULT;
-			r = TC_ERR;
+			r = VC_ERR;
 			goto out;
 		}
 		i64p = va_arg(ap, int64_t *);
@@ -799,7 +799,7 @@ tc_api_task_info_get(tc_api_task task, const char *key, ...)
 	} else if (_match(key, "iv_offset")) {
 		if (sz != sizeof(int64_t)) {
 			errno = EFAULT;
-			r = TC_ERR;
+			r = VC_ERR;
 			goto out;
 		}
 		i64p = va_arg(ap, int64_t *);
@@ -810,7 +810,7 @@ tc_api_task_info_get(tc_api_task task, const char *key, ...)
 	} else if (_match(key, "block_offset")) {
 		if (sz != sizeof(int64_t)) {
 			errno = EFAULT;
-			r = TC_ERR;
+			r = VC_ERR;
 			goto out;
 		}
 		i64p = va_arg(ap, int64_t *);
@@ -819,7 +819,7 @@ tc_api_task_info_get(tc_api_task task, const char *key, ...)
 		else
 			*i64p = (int64_t)info->offset * (int64_t)info->blk_sz;
 	} else {
-		r = TC_ERR_UNIMPL;
+		r = VC_ERR_UNIMPL;
 	}
 
 out:
