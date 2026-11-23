@@ -1,7 +1,36 @@
+VCPlay is an enhanced fork of [tc-play](https://github.com/bwalex/tc-play),
+built on [Alex Hornung](https://github.com/bwalex)’s original codebase.
+It supports a wider range of VeraCrypt volumes and better protects hidden
+volumes from accidental overwrites.
+
+Acknowledgments
+==========
+
+Special thanks to Alex Hornung for the years he devoted to developing and
+maintaining the original software.
+Behind the simplicity of opening an encrypted volume with a
+single command are countless hours of patient, thoughtful work. This fork owes
+its existence to that dedication and to Alex’s generosity in sharing his work.
+
+VCPlay will stay simple KISS, easy to use, and portable across operating
+systems and hardware architectures.
+
+VeraCrypt has continued to evolve in the years since the last tc-play release.
+VCPlay was started to keep pace with those changes while preserving support for
+legacy TrueCrypt volumes and the speed of in-kernel disk encryption.
+The goal is for a volume created or updated in either
+VeraCrypt or VCPlay to work safely in the other.
+
+The fork has its own command, `vcplay`, so both tools can be installed side by
+side and existing scripts can keep calling `tcplay`. This matters because
+tc-play handles some volume operations differently from VeraCrypt.
+VCPlay uses VeraCrypt as the reference for those operations, so compatibility
+with every volume created or modified by tc-play cannot be guaranteed.
+
 About
 ==========
-tcplay is a free (BSD-licensed), pretty much fully featured (including multiple
-keyfiles, cipher cascades, etc) and stable TrueCrypt implementation.
+VCPlay is a BSD-licensed implementation of the TrueCrypt and VeraCrypt volume
+formats. Its command-line tool is named `vcplay`.
 
 This implementation supports mapping (opening) both system and normal TrueCrypt
 volumes, as well as opening hidden volumes and opening an outer volume while
@@ -10,7 +39,7 @@ hidden volumes, etc. Since version 1.1, there is also support for restoring
 from the backup header (if present), change passphrase, keyfile and PBKDF2
 PRF function.
 
-Since tcplay uses dm-crypt (or dm_target_crypt on DragonFly) it makes full use
+Since VCPlay uses dm-crypt (or dm_target_crypt on DragonFly) it makes full use
 of any available hardware encryption/decryption support once the volume has been
 mapped.
 
@@ -22,8 +51,8 @@ the trial and error approach.
 
 VeraCrypt support
 ==========
-tcplay has support for creating, modifying and mapping VeraCrypt volumes. See
-the man page for more details.
+VCPlay supports creating, modifying and mapping VeraCrypt volumes. See the
+[`vcplay(8)` manual](vcplay.8) for command-line options.
 
 
 Implementation notes
@@ -55,14 +84,14 @@ The interface to device mapper is libdevmapper on Linux and libdm on DragonFly.
 libdm is a BSD-licensed version of libdevmapper that I hacked together in a few
 hours.
 
-On Ubuntu, the following dev packages are needed to build tcplay:
+On Ubuntu, the following dev packages are needed to build VCPlay:
 
     apt-get install build-essential libdevmapper-dev libgcrypt11-dev uuid-dev
 
 
 cmake
 ----------
-New in version 1.0 is a cmake build system. tcplay can now be built using:
+VCPlay can be built with CMake:
 
     mkdir objdir
     cd objdir
@@ -83,8 +112,9 @@ Debian or Ubuntu system you can install it using:
 This process will check for dependencies and automatically select whether to
 use OpenSSL or gcrypt as PBKDF backend.
 
-In addition, this process will also generate a .pc file (pkg-config) for the
-tcplay library.
+The build also generates `vcplay.pc`. After installation,
+`pkg-config --cflags --libs vcplay` prints the compiler and linker flags for
+`libvcplay`.
 
 The classic single-file Makefile can still be used for building, however, using
 
@@ -92,35 +122,35 @@ The classic single-file Makefile can still be used for building, however, using
 
 Or, if you only want the command line tool:
 
-    make -f Makefile.classic tcplay
+    make -f Makefile.classic vcplay
 
 
 Library
 ==========
-In addition to providing a command line tool, tcplay is also available as a
-library. See the `tcplay.3` man page for more details on how to use the API.
-
-TODO: link examples
+The C library is named `libvcplay`. Its public header is `vcplay_api.h`, and
+its functions use the `vc_api_` prefix. The [`vcplay(3)` manual](vcplay.3)
+describes the available operations and their parameters.
 
 
 Documentation
 ==========
-Please refer to the man pages bundled with tcplay.
+The installed manuals are available as `man 8 vcplay` for the command-line
+tool and `man 3 vcplay` for the C API.
 
 
 
 Download for packaging
 ==========
-Latest release can be found as a (source) tarball at:
-
-https://github.com/bwalex/tc-play/archive/v3.3.tar.gz
+The [VCPlay source archive](https://github.com/dennisrazumovsky/VCPlay/archive/refs/heads/master.tar.gz)
+contains the current `master` branch. A specific commit can be used for a
+reproducible package build.
 
 
 
 Bugs
 ==========
-Please report all bugs on the github issue tracker. If appropriate, please
-attach a small test volume which you think tcplay isn't handling correctly.
+Where practical, bug reports should include a small test volume that
+demonstrates the issue in VCPlay.
 The reduce_test_vol.sh script in test/ can significantly reduce the size
 of a volume when compressed by stripping out all the unnecessary data,
 leaving only the headers. After that, just bzip2 it and it should be fairly
@@ -128,15 +158,14 @@ tiny.
 
 What would be even better is if you could write a small test case to
 reproduce the issue. The README in the test/ directory has information on
-how to write tests for tcplay.
+how to write tests for VCPlay.
 
 
 
 OS Support
 ==========
-tcplay is now available for both DragonFly BSD and Linux. It is a core part of
-the DragonFly BSD operating system and is available in a number of linux
-distros.
+VCPlay supports Linux and DragonFly BSD. The original `tcplay` utility is
+part of DragonFly BSD and has been packaged by several Linux distributions.
 
 
 
@@ -149,13 +178,8 @@ it if required. Drop me an email to discuss the options.
 
 Development
 ==========
-tcplay is pretty much stable, but if you find a bug, please report it.
-If anyone wants to add new features or port it to another OS, I'll gladly merge
-your changes into this repository so that there is a single point of contact.
-
-I've noticed that sometimes bugs are only reported downstream (e.g. in the
-distro's bugtracker). Please make sure those bugs are also reported upstream on
-github, otherwise odds are they will never reach me.
+Fixes, new features and ports can be submitted as
+[pull requests to VCPlay](https://github.com/dennisrazumovsky/VCPlay/pulls).
 
 
 

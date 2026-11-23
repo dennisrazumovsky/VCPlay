@@ -27,26 +27,49 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _TCPLAY_API_INTERNAL_H
-#define _TCPLAY_API_INTERNAL_H
+#ifndef _VCPLAY_API_H
+#define _VCPLAY_API_H
 
 #include <stddef.h>
-#include "tcplay.h"
 
-typedef enum tc_api_op {
-	TC_OP_CREATE,
-	TC_OP_MAP,
-	TC_OP_UNMAP,
-	TC_OP_INFO,
-	TC_OP_INFO_MAPPED,
-	TC_OP_MODIFY,
-	TC_OP_RESTORE
-} tc_api_op;
+#define VC_OK		0
+#define VC_ERR		-1
+#define VC_ERR_UNIMPL	-255
 
-struct _tc_api_task {
-	tc_api_op		op;
-	struct tcplay_opts	*opts;
-	struct tcplay_info	*last_info;
-};
+#define VC_STATE_ENTER	1
+#define VC_STATE_EXIT	0
+
+struct _vc_api_task;
+
+typedef struct _vc_api_task *vc_api_task;
+
+typedef int (*vc_api_cipher_iterator_fn)(void *, const char *, int /* klen */, int /* length */);
+typedef int (*vc_api_prf_iterator_fn)(void *, const char *);
+typedef int (*vc_api_state_change_fn)(void *, const char *, int);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int vc_api_init(int verbose);
+int vc_api_uninit(void);
+
+int vc_api_has(const char *feature);
+
+int vc_api_cipher_iterate(vc_api_cipher_iterator_fn fn, void *priv);
+int vc_api_prf_iterate(vc_api_prf_iterator_fn fn, void *priv);
+
+
+vc_api_task vc_api_task_init(const char *op);
+int vc_api_task_uninit(vc_api_task task);
+int vc_api_task_set(vc_api_task task, const char *key, ...);
+int vc_api_task_do(vc_api_task task);
+
+int vc_api_task_info_get(vc_api_task task, const char *key, ...);
+const char *vc_api_task_get_error(vc_api_task task);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

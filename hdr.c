@@ -35,13 +35,14 @@
 #include <endian.h>
 #endif
 #include <errno.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
 
 #include "crc32.h"
-#include "tcplay.h"
+#include "vcplay.h"
 
 /* Endianess macros */
 #define BE_TO_HOST(n, v) v = be ## n ## toh(v)
@@ -56,7 +57,7 @@ struct sig_hdr_cfg {
 
 struct sig_hdr_cfg sig_hdr_cfgs[] = {
 	{ TC_SIG,	0x0007 },
-	{ VC_SIG,	0x0b01 },
+	{ VC_SIG,	VC_MIN_VER },
 	{ NULL,		0x0000 }
 };
 
@@ -256,7 +257,7 @@ create_hdr(unsigned char *pass, int passlen, struct pbkdf_prf_algo *prf_algo,
 	HOST_TO_BE(32, dhdr->sec_sz);
 	HOST_TO_BE(32, dhdr->flags);
 
-	dhdr->crc_dhdr = crc32((void *)dhdr, 188);
+	dhdr->crc_dhdr = crc32(dhdr, offsetof(struct tchdr_dec, crc_dhdr));
 	HOST_TO_BE(32, dhdr->crc_dhdr);
 
 	memset(iv, 0, sizeof(iv));
@@ -304,21 +305,18 @@ error:
 }
 
 struct tchdr_enc *copy_reencrypt_hdr(unsigned char *pass, int passlen,
-    struct pbkdf_prf_algo *prf_algo, int weak, struct tcplay_info *info,
+    struct pbkdf_prf_algo *prf_algo, int weak, struct vcplay_info *info,
     struct tchdr_enc **backup_hdr)
 {
 	struct tchdr_enc *ehdr, *ehdr_backup;
 	unsigned char *key, *key_backup;
 	unsigned char iv[128];
 	const struct sig_hdr_cfg *hdr_cfg;
+	const uint16_t header_version = info->hdr->tc_ver;
 	int error;
 
 	key = key_backup = NULL;
 	ehdr = ehdr_backup = NULL;
-
-	/* By default stick to current PRF algo */
-	if (prf_algo == NULL)
-		prf_algo = info->pbkdf_prf;
 
 	if ((ehdr = (struct tchdr_enc *)alloc_safe_mem(sizeof(*ehdr))) == NULL) {
 		tc_log(1, "could not allocate safe ehdr memory\n");
@@ -388,6 +386,8 @@ struct tchdr_enc *copy_reencrypt_hdr(unsigned char *pass, int passlen,
 	HOST_TO_BE(64, info->hdr->sz_mk_scope);
 	HOST_TO_BE(32, info->hdr->sec_sz);
 	HOST_TO_BE(32, info->hdr->flags);
+	if (header_version >= 4)
+		info->hdr->crc_dhdr = crc32(info->hdr, offsetof(struct tchdr_dec, crc_dhdr));
 	HOST_TO_BE(32, info->hdr->crc_dhdr);
 
 	memset(iv, 0, sizeof(iv));

@@ -56,7 +56,7 @@
 #include <dirent.h>
 
 #include "crc32.h"
-#include "tcplay.h"
+#include "vcplay.h"
 #include "humanize.h"
 
 
@@ -316,14 +316,13 @@ print_hex(unsigned char *buf, off_t start, size_t len)
 #endif
 
 void
-print_info(struct tcplay_info *info)
+print_info(struct vcplay_info *info)
 {
 	printf("Device:\t\t\t%s\n", info->dev);
 
 	if (info->pbkdf_prf != NULL) {
 		printf("PBKDF2 PRF:\t\t%s\n", info->pbkdf_prf->name);
-		printf("PBKDF2 iterations:\t%d\n",
-		    info->pbkdf_prf->iteration_count);
+		printf("PBKDF2 iterations:\t%d\n", info->iteration_count);
 	}
 
 	printf("Cipher:\t\t\t%s\n",
@@ -358,18 +357,18 @@ print_info(struct tcplay_info *info)
 }
 
 static
-struct tcplay_info *
+struct vcplay_info *
 new_info(const char *dev, int flags, struct tc_cipher_chain *cipher_chain,
     struct pbkdf_prf_algo *prf, struct tchdr_dec *hdr, off_t start)
 {
 	struct tc_cipher_chain *chain_start;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	int i;
 	int error;
 
 	chain_start = cipher_chain;
 
-	if ((info = (struct tcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
+	if ((info = (struct vcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
 		tc_log(1, "could not allocate safe info memory\n");
 		return NULL;
 	}
@@ -391,24 +390,6 @@ new_info(const char *dev, int flags, struct tc_cipher_chain *cipher_chain,
 	else
 		info->offset = hdr->off_mk_scope / hdr->sec_sz;	/* block offset */
 
-	if (hdr->tc_min_ver < 6) {
-		/* Volume layout v1 */
-		if (hdr->sz_hidvol == 0) {
-			info->offset = info->skip = HDR_SIZE_LEGACY / hdr->sec_sz;
-		} else {
-			disksz_t blocks;
-			size_t bsize;
-
-			if (get_disk_info(info->dev, &blocks, &bsize) != 0) {
-				tc_log(1, "cannot compute hidden volume size\n");
-				return NULL;
-			}
-
-			info->skip = ((blocks * bsize) - hdr->sz_mk_scope + HDR_OFFSET_HIDDEN_LEGACY) / hdr->sec_sz;
-			info->offset = info->skip;
-		}
-	}
-
 	/* Associate a key out of the key pool with each cipher in the chain */
 	error = tc_cipher_chain_populate_keys(cipher_chain, hdr->keys);
 	if (error) {
@@ -428,7 +409,7 @@ new_info(const char *dev, int flags, struct tc_cipher_chain *cipher_chain,
 }
 
 int
-free_info(struct tcplay_info *info)
+free_info(struct vcplay_info *info)
 {
 	if (info->cipher_chain)
 		tc_free_cipher_chain(info->cipher_chain);
@@ -441,27 +422,98 @@ free_info(struct tcplay_info *info)
 }
 
 int
-adjust_info(struct tcplay_info *info, struct tcplay_info *hinfo)
+adjust_info(struct vcplay_info *info, struct vcplay_info *hinfo)
 {
-	if (hinfo->hdr->sz_hidvol == 0)
+	const struct tchdr_dec *outer = info->hdr;
+	const struct tchdr_dec *hidden = hinfo->hdr;
+	uint64_t outer_prefix_bytes;
+
+	if (hidden->sz_hidvol == 0 || hidden->off_mk_scope <= outer->off_mk_scope)
 		return 1;
 
-	if (info->hdr->tc_min_ver < 6) {
-		/* Volume layout v1 */
-		info->size -= (hinfo->hdr->sz_mk_scope - HDR_OFFSET_HIDDEN_LEGACY) / hinfo->hdr->sec_sz;
-	} else {
-		info->size -= hinfo->hdr->sz_hidvol / hinfo->hdr->sec_sz;
-	}
-  
+	/*
+	 * The outer mapping ends where the hidden data begins. The distance
+	 * between the two starting offsets gives the usable length in bytes,
+	 * even when there is unused space after the hidden data.
+	 * The hidden data must fit inside the outer volume, and the usable
+	 * length must be a whole number of outer volume sectors.
+	 */
+	outer_prefix_bytes = hidden->off_mk_scope - outer->off_mk_scope;
+	if (outer_prefix_bytes > outer->sz_mk_scope ||
+	    hidden->sz_hidvol > outer->sz_mk_scope - outer_prefix_bytes ||
+	    outer_prefix_bytes % info->blk_sz != 0)
+		return 1;
+
+	info->size = outer_prefix_bytes / info->blk_sz;
 	return 0;
 }
 
-int
-process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
-    struct tchdr_enc *ehdr, struct tcplay_info **pinfo)
+static int
+supports_pim(const struct pbkdf_prf_algo *prf)
+{
+	return !prf->sys && strcmp(prf->sig, VC_SIG) == 0;
+}
+
+static int
+apply_pim(struct pbkdf_prf_algo *prf, int pim)
+{
+	if (pim <= 0)
+		return 0;
+	if (!supports_pim(prf))
+		return EINVAL;
+	prf->iteration_count = 15000 + pim * 1000;
+	return 0;
+}
+
+static int
+is_legacy_volume(const struct tchdr_dec *hdr)
+{
+	/* tc_min_ver is read little-endian, with the major version in its low byte. */
+	return memcmp(hdr->tc_str, TC_SIG, sizeof(hdr->tc_str)) == 0 &&
+	    (hdr->tc_min_ver & 0xff) < 6;
+}
+
+static int
+prepare_volume_layout(struct tchdr_dec *hdr, int flags, uint64_t device_size,
+    int legacy_hidden)
+{
+	uint64_t hidden_header_offset;
+
+	if (!is_legacy_volume(hdr) || (flags & (TC_FLAG_SYS | TC_FLAG_FDE)))
+		return !legacy_hidden;
+
+	if (device_size < HDR_SIZE_LEGACY + HDR_OFFSET_HIDDEN_LEGACY ||
+	    hdr->sec_sz != HDR_SIZE_LEGACY)
+		return 0;
+
+	/*
+	 * Layout v1 places normal data after the first header and hidden
+	 * data immediately before the hidden header near the end of the device.
+	 */
+	if (hdr->sz_hidvol == 0) {
+		if (legacy_hidden)
+			return 0;
+		hdr->off_mk_scope = HDR_SIZE_LEGACY;
+		hdr->sz_mk_scope = device_size - HDR_SIZE_LEGACY;
+	} else {
+		hidden_header_offset = device_size - HDR_OFFSET_HIDDEN_LEGACY;
+		if (hdr->sz_hidvol > hidden_header_offset - HDR_SIZE_LEGACY ||
+		    hdr->sz_hidvol % HDR_SIZE_LEGACY != 0)
+			return 0;
+		hdr->off_mk_scope = hidden_header_offset - hdr->sz_hidvol;
+		hdr->sz_mk_scope = hdr->sz_hidvol;
+	}
+	return 1;
+}
+
+static int
+process_hdr(const struct vcplay_opts *opts, uint64_t device_size,
+    unsigned char *pass, int passlen, int pim, int legacy_hidden,
+    struct tchdr_enc *ehdr, struct vcplay_info **pinfo)
 {
 	struct tchdr_dec *dhdr;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
+	struct pbkdf_prf_algo prf;
 	struct tc_cipher_chain *cipher_chain = NULL;
 	unsigned char *key;
 	int i, j, found, error;
@@ -476,19 +528,22 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 	/* Start search for correct algorithm combination */
 	found = 0;
 	for (i = 0; !found && pbkdf_prf_algos[i].name != NULL; i++) {
+		prf = pbkdf_prf_algos[i];
+		if (legacy_hidden && strcmp(prf.sig, TC_SIG) != 0)
+			continue;
+		if (apply_pim(&prf, pim) != 0)
+			continue;
 #ifdef DEBUG
-		printf("\nTrying PRF algo %s (%d)\n", pbkdf_prf_algos[i].name,
-		    pbkdf_prf_algos[i].iteration_count);
+		printf("\nTrying PRF algo %s (%d)\n", prf.name, prf.iteration_count);
 		printf("Salt: ");
 		print_hex(ehdr->salt, 0, sizeof(ehdr->salt));
 #endif
-		error = pbkdf2(&pbkdf_prf_algos[i], (char *)pass, passlen,
+		error = pbkdf2(&prf, (char *)pass, passlen,
 		    ehdr->salt, sizeof(ehdr->salt),
 		    MAX_KEYSZ, key);
 
 		if (error) {
-			tc_log(1, "pbkdf failed for algorithm %s\n",
-			    pbkdf_prf_algos[i].name);
+			tc_log(1, "pbkdf failed for algorithm %s\n", prf.name);
 			free_safe_mem(key);
 			return EINVAL;
 		}
@@ -512,7 +567,8 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 				return EINVAL;
 			}
 
-			if (verify_hdr(dhdr, &pbkdf_prf_algos[i])) {
+			if (verify_hdr(dhdr, &prf) && prepare_volume_layout(dhdr,
+			    opts->flags, device_size, legacy_hidden)) {
 #ifdef DEBUG
 				printf("tc_str: %.4s, tc_ver: %d, tc_min_ver: %d, "
 				    "crc_keys: %d, sz_vol: %"PRIu64", "
@@ -536,19 +592,20 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 	if (!found)
 		return EINVAL;
 
-	if ((info = new_info(dev, flags, cipher_chain,
+	if ((info = new_info(opts->dev, opts->flags, cipher_chain,
 	    &pbkdf_prf_algos[i-1], dhdr, 0)) == NULL) {
 		free_safe_mem(dhdr);
 		return ENOMEM;
 	}
 
+	info->iteration_count = prf.iteration_count;
 	*pinfo = info;
 
 	return 0;
 }
 
 int
-create_volume(struct tcplay_opts *opts)
+create_volume(struct vcplay_opts *opts)
 {
 	char *pass, *pass_again;
 	char *h_pass = NULL;
@@ -557,8 +614,16 @@ create_volume(struct tcplay_opts *opts)
 	size_t blksz;
 	struct tchdr_enc *ehdr, *hehdr;
 	struct tchdr_enc *ehdr_backup, *hehdr_backup;
+	const struct pbkdf_prf_algo *base_prf;
+	struct pbkdf_prf_algo outer_prf, hidden_prf;
 	uint64_t tmp;
 	int error, r, ret;
+
+	if (opts->h_pim >= 0 && !opts->hidden) {
+		tc_log(1, "A hidden volume PIM requires creating a hidden volume\n");
+		errno = EINVAL;
+		return -1;
+	}
 
 	pass = h_pass = pass_again = NULL;
 	ehdr = hehdr = NULL;
@@ -567,12 +632,32 @@ create_volume(struct tcplay_opts *opts)
 
 	if (opts->cipher_chain == NULL)
 		opts->cipher_chain = tc_cipher_chains[0];
-	if (opts->prf_algo == NULL)
-		opts->prf_algo = &pbkdf_prf_algos[DEFAULT_PRF_ALGO_IDX];
+
 	if (opts->h_cipher_chain == NULL)
 		opts->h_cipher_chain = opts->cipher_chain;
-	if (opts->h_prf_algo == NULL)
-		opts->h_prf_algo = opts->prf_algo;
+
+	base_prf = &pbkdf_prf_algos[DEFAULT_PRF_ALGO_IDX];
+	if (opts->prf_algo != NULL)
+		base_prf = opts->prf_algo;
+
+	outer_prf = *base_prf;
+	if (apply_pim(&outer_prf, opts->pim) != 0) {
+		tc_log(1, "A positive PIM for the outer volume requires a VeraCrypt PRF\n");
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (opts->hidden) {
+		hidden_prf = *base_prf;
+		if (opts->h_prf_algo != NULL)
+			hidden_prf = *opts->h_prf_algo;
+
+		if (apply_pim(&hidden_prf, opts->h_pim) != 0) {
+			tc_log(1, "A positive PIM for the hidden volume requires a VeraCrypt PRF\n");
+			errno = EINVAL;
+			return -1;
+		}
+	}
 
 	if ((error = get_disk_info(opts->dev, &blocks, &blksz)) != 0) {
 		tc_log(1, "could not get disk info\n");
@@ -791,7 +876,7 @@ create_volume(struct tcplay_opts *opts)
 	/* create encrypted headers */
 	ehdr = create_hdr((unsigned char *)pass,
 	    (opts->nkeyfiles > 0)?MAX_PASSSZ:strlen(pass),
-	    opts->prf_algo, opts->cipher_chain, blksz, blocks, VOL_RSVD_BYTES_START/blksz,
+	    &outer_prf, opts->cipher_chain, blksz, blocks, VOL_RSVD_BYTES_START/blksz,
 	    blocks - (MIN_VOL_BYTES/blksz), 0, opts->weak_keys_and_salt, &ehdr_backup);
 	if (ehdr == NULL) {
 		tc_log(1, "Could not create header\n");
@@ -800,7 +885,7 @@ create_volume(struct tcplay_opts *opts)
 
 	if (opts->hidden) {
 		hehdr = create_hdr((unsigned char *)h_pass,
-		    (opts->n_hkeyfiles > 0)?MAX_PASSSZ:strlen(h_pass), opts->h_prf_algo,
+		    (opts->n_hkeyfiles > 0)?MAX_PASSSZ:strlen(h_pass), &hidden_prf,
 		    opts->h_cipher_chain,
 		    blksz, blocks,
 		    blocks - (VOL_RSVD_BYTES_END/blksz) - hidden_blocks,
@@ -870,25 +955,74 @@ out:
 	return ret;
 }
 
-struct tcplay_info *
-info_map_common(struct tcplay_opts *opts, char *passphrase_out)
+static int
+process_hidden_hdr(const struct vcplay_opts *opts, uint64_t device_size,
+    size_t blksz, struct tchdr_enc *hehdr, char *pass,
+    const struct vcplay_info *outer, struct vcplay_info **pinfo)
+{
+	int pim = opts->protect_hidden ? opts->h_pim : opts->pim;
+	int nkeyfiles = opts->protect_hidden ? opts->n_hkeyfiles : opts->nkeyfiles;
+	int passlen = nkeyfiles > 0 ? MAX_PASSSZ : strlen(pass);
+	int try_legacy = blksz == HDR_SIZE_LEGACY && pim <= 0 &&
+	    (outer == NULL || is_legacy_volume(outer->hdr)) &&
+	    !(opts->flags & (TC_FLAG_BACKUP | TC_FLAG_H_HDR_FROM_FILE |
+	    TC_FLAG_SYS | TC_FLAG_FDE));
+	struct tchdr_enc *legacy_hdr;
+	size_t sz = sizeof(*legacy_hdr);
+	int error = EINVAL;
+
+	/*
+	 * An open outer volume identifies the layout. With only the hidden
+	 * password, try the current layout before the old one.
+	 */
+	if (hehdr != NULL && (outer == NULL || !try_legacy))
+		error = process_hdr(opts, device_size, (unsigned char *)pass, passlen,
+		    pim, 0, hehdr, pinfo);
+	if (error != EINVAL || !try_legacy)
+		return error;
+
+	legacy_hdr = read_to_safe_mem(opts->dev, -HDR_OFFSET_HIDDEN_LEGACY, &sz);
+	if (legacy_hdr == NULL)
+		return EIO;
+	if (sz == sizeof(*legacy_hdr))
+		error = process_hdr(opts, device_size, (unsigned char *)pass, passlen,
+		    pim, 1, legacy_hdr, pinfo);
+	free_safe_mem(legacy_hdr);
+	return error;
+}
+
+struct vcplay_info *
+info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 {
 	struct tchdr_enc *ehdr, *hehdr = NULL;
-	struct tcplay_info *info, *hinfo = NULL;
+	struct vcplay_info *info, *hinfo = NULL;
 	char *pass;
 	char *h_pass;
-	int error, error2 = 0;
+	int error;
 	size_t sz;
 	size_t blksz;
 	disksz_t blocks;
+	uint64_t device_size;
 	int is_hidden = 0;
 	int try_empty = 0;
 	int retries;
+
+	if (opts->h_pim >= 0 && !opts->protect_hidden) {
+		tc_log(1, "A hidden volume PIM requires hidden volume protection\n");
+		errno = EINVAL;
+		return NULL;
+	}
+	if ((opts->pim > 0 || opts->h_pim > 0) && (opts->flags & (TC_FLAG_SYS | TC_FLAG_FDE))) {
+		tc_log(1, "A positive PIM requires a non-system VeraCrypt volume\n");
+		errno = EINVAL;
+		return NULL;
+	}
 
 	if ((error = get_disk_info(opts->dev, &blocks, &blksz)) != 0) {
 		tc_log(1, "could not get disk information\n");
 		return NULL;
 	}
+	device_size = blocks * blksz;
 
 	if (opts->retries < 1)
 		retries = 1;
@@ -1019,7 +1153,8 @@ info_map_common(struct tcplay_opts *opts, char *passphrase_out)
 					tc_log(1, "error read hdr_enc: %s", opts->h_hdr_file_in);
 					goto out;
 				}
-			} else {
+			} else if (TC_FLAG_SET(opts->flags, BACKUP) ||
+			    device_size >= HDR_OFFSET_HIDDEN + sizeof(*hehdr)) {
 				hehdr = (struct tchdr_enc *)read_to_safe_mem(opts->dev,
 				    (!TC_FLAG_SET(opts->flags, BACKUP)) ? HDR_OFFSET_HIDDEN :
 				    -BACKUP_HDR_HIDDEN_OFFSET_END, &sz);
@@ -1032,57 +1167,26 @@ info_map_common(struct tcplay_opts *opts, char *passphrase_out)
 			hehdr = NULL;
 		}
 
-		error = process_hdr(opts->dev, opts->flags, (unsigned char *)pass,
+		error = process_hdr(opts, device_size, (unsigned char *)pass,
 		    (opts->nkeyfiles > 0)?MAX_PASSSZ:strlen(pass),
-		    ehdr, &info);
+		    opts->pim, 0, ehdr, &info);
 
 		/*
 		 * Try to process hidden header if we have to protect the hidden
 		 * volume, or the decryption/verification of the main header
 		 * failed.
 		 */
-		if (hehdr && (error || opts->protect_hidden)) {
-			if (error) {
-				error2 = process_hdr(opts->dev, opts->flags, (unsigned char *)pass,
-				    (opts->nkeyfiles > 0)?MAX_PASSSZ:strlen(pass), hehdr,
-				    &info);
-				is_hidden = !error2;
-			} else if (opts->protect_hidden) {
-				error2 = process_hdr(opts->dev, opts->flags, (unsigned char *)h_pass,
-				    (opts->n_hkeyfiles > 0)?MAX_PASSSZ:strlen(h_pass), hehdr,
-				    &hinfo);
-			}
-
-			if (error2 && !TC_FLAG_SET(opts->flags, BACKUP)) {
-				/* Try layout v1 where hidden volume header is at the end of volume */
-
-				/* Always read blksz-sized chunks */
-				sz = blksz;
-
-				free_safe_mem(hehdr);
-				hehdr = (struct tchdr_enc *)read_to_safe_mem(opts->dev,
-				    HDR_OFFSET_HIDDEN_LEGACY, &sz);
-				if (hehdr == NULL) {
-					tc_log(1, "error read hdr_enc: %s", opts->dev);
-					goto out;
-				}
-
-				if (error) {
-					error2 = process_hdr(opts->dev, opts->flags, (unsigned char *)pass,
-					    (opts->nkeyfiles > 0)?MAX_PASSSZ:strlen(pass), hehdr,
-					    &info);
-					is_hidden = !error2;
-				} else if (opts->protect_hidden) {
-					error2 = process_hdr(opts->dev, opts->flags, (unsigned char *)h_pass,
-					    (opts->n_hkeyfiles > 0)?MAX_PASSSZ:strlen(h_pass), hehdr,
-					    &hinfo);
-				}
-			}
+		if (error && !opts->protect_hidden) {
+			error = process_hidden_hdr(opts, device_size, blksz, hehdr,
+			    pass, NULL, &info);
+			is_hidden = !error;
+		} else if (!error && opts->protect_hidden) {
+			error = process_hidden_hdr(opts, device_size, blksz, hehdr,
+			    h_pass, info, &hinfo);
 		}
 
 		/* We need both to protect a hidden volume */
-		if ((opts->protect_hidden && (error || error2)) ||
-		    (error && error2)) {
+		if (error || (opts->protect_hidden && hinfo == NULL)) {
 			if (!try_empty)
 				tc_log(1, "Incorrect password or not a TrueCrypt volume\n");
 
@@ -1157,9 +1261,9 @@ out:
 }
 
 int
-info_mapped_volume(struct tcplay_opts *opts)
+info_mapped_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 
 	info = dm_info_map(opts->map_name);
 	if (info != NULL) {
@@ -1179,9 +1283,9 @@ info_mapped_volume(struct tcplay_opts *opts)
 }
 
 int
-info_volume(struct tcplay_opts *opts)
+info_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 
 	info = info_map_common(opts, NULL);
 
@@ -1199,9 +1303,9 @@ info_volume(struct tcplay_opts *opts)
 }
 
 int
-map_volume(struct tcplay_opts *opts)
+map_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	int error;
 
 	info = info_map_common(opts, NULL);
@@ -1224,14 +1328,17 @@ map_volume(struct tcplay_opts *opts)
 }
 
 int
-modify_volume(struct tcplay_opts *opts)
+modify_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	struct tchdr_enc *ehdr, *ehdr_backup;
 	const char *new_passphrase = opts->new_passphrase;
 	const char **new_keyfiles = opts->new_keyfiles;
-	struct pbkdf_prf_algo *new_prf_algo = opts->new_prf_algo;
+	struct pbkdf_prf_algo prf;
 	int n_newkeyfiles = opts->n_newkeyfiles;
+	int restore = TC_FLAG_SET(opts->flags, ONLY_RESTORE);
+	int change_pim = opts->new_pim >= 0;
+	int write_pim = change_pim ? opts->new_pim : opts->pim;
 	char *pass, *pass_again;
 	int ret = -1;
 	off_t offset, offset_backup = 0;
@@ -1244,7 +1351,12 @@ modify_volume(struct tcplay_opts *opts)
 	pass = pass_again = NULL;
 	info = NULL;
 
-	if (TC_FLAG_SET(opts->flags, ONLY_RESTORE)) {
+	if (change_pim && (restore || (opts->flags & (TC_FLAG_SYS | TC_FLAG_FDE)))) {
+		tc_log(1, "A new PIM can only be set when modifying a non-system VeraCrypt volume\n");
+		errno = EINVAL;
+		goto out;
+	}
+	if (restore) {
 		if (opts->interactive) {
 			if ((pass = alloc_safe_mem(PASS_BUFSZ)) == NULL) {
 				tc_log(1, "could not allocate safe "
@@ -1254,23 +1366,40 @@ modify_volume(struct tcplay_opts *opts)
 		} else {
 			new_passphrase = opts->passphrase;
 		}
+	}
+	if (restore || (change_pim && n_newkeyfiles == 0)) {
 		new_keyfiles = opts->keyfiles;
 		n_newkeyfiles = opts->nkeyfiles;
-		new_prf_algo = NULL;
 	}
 
 	info = info_map_common(opts, pass);
 	if (info == NULL)
 		goto out;
 
-	if (info->hdr->tc_min_ver < 6) {
-		/* Volume layout v1 */
-		tc_log(1, "changes to volumes created with old versions "
-		    "(<6.0) of TrueCrypt are not supported\n ");
+	if (is_legacy_volume(info->hdr)) {
+		tc_log(1, "Changing headers on TrueCrypt volumes created before 6.0 is not supported\n");
+		errno = EINVAL;
 		goto out;
 	}
 
-	if (opts->interactive && !TC_FLAG_SET(opts->flags, ONLY_RESTORE)) {
+	if (change_pim && (!supports_pim(info->pbkdf_prf) || info->hdr->tc_min_ver != VC_MIN_VER)) {
+		tc_log(1, "Changing the PIM requires a VeraCrypt volume with primary and backup headers\n");
+		errno = EINVAL;
+		goto out;
+	}
+
+	/* By default stick to current PRF algo */
+	prf = *info->pbkdf_prf;
+	if (opts->new_prf_algo != NULL && !restore)
+		prf = *opts->new_prf_algo;
+	if ((change_pim && !supports_pim(&prf)) ||
+	    apply_pim(&prf, write_pim) != 0) {
+		tc_log(1, "This PIM setting requires a VeraCrypt PRF\n");
+		errno = EINVAL;
+		goto out;
+	}
+
+	if (opts->interactive && !restore) {
 		if (((pass = alloc_safe_mem(PASS_BUFSZ)) == NULL) ||
 		   ((pass_again = alloc_safe_mem(PASS_BUFSZ)) == NULL)) {
 			tc_log(1, "could not allocate safe passphrase memory\n");
@@ -1300,6 +1429,8 @@ modify_volume(struct tcplay_opts *opts)
 			goto out;
 		}
 
+		if (change_pim && new_passphrase == NULL)
+			new_passphrase = opts->passphrase;
 		if (new_passphrase != NULL) {
 			strncpy(pass, new_passphrase, MAX_PASSSZ);
 			pass[MAX_PASSSZ] = '\0';
@@ -1316,8 +1447,8 @@ modify_volume(struct tcplay_opts *opts)
 	}
 
 	ehdr = copy_reencrypt_hdr((unsigned char *)pass,
-	    (opts->n_newkeyfiles > 0)?MAX_PASSSZ:strlen(pass),
-	    new_prf_algo, opts->weak_keys_and_salt, info, &ehdr_backup);
+	    (n_newkeyfiles > 0)?MAX_PASSSZ:strlen(pass),
+	    &prf, opts->weak_keys_and_salt, info, &ehdr_backup);
 	if (ehdr == NULL) {
 		tc_log(1, "Could not create header\n");
 		goto out;
@@ -1384,7 +1515,7 @@ out:
 	if (ehdr_backup)
 		free_safe_mem(ehdr_backup);
 	if (info)
-		free_safe_mem(info);
+		free_info(info);
 
 	return ret;
 }
@@ -1492,10 +1623,10 @@ xlate_maj_min(const char *start_path, int max_depth, char *buf, size_t bufsz,
 #endif
 
 static
-struct tcplay_dm_table *
+struct vcplay_dm_table *
 dm_get_table(const char *name)
 {
-	struct tcplay_dm_table *tc_table;
+	struct vcplay_dm_table *tc_table;
 	struct dm_task *dmt = NULL;
 	void *next = NULL;
 	uint64_t start, length;
@@ -1505,7 +1636,7 @@ dm_get_table(const char *name)
 	int c = 0;
 	uint32_t maj, min;
 
-	if ((tc_table = (struct tcplay_dm_table *)alloc_safe_mem(sizeof(*tc_table))) == NULL) {
+	if ((tc_table = (struct vcplay_dm_table *)alloc_safe_mem(sizeof(*tc_table))) == NULL) {
 		tc_log(1, "could not allocate safe tc_table memory\n");
 		return NULL;
 	}
@@ -1598,21 +1729,21 @@ error:
 	return NULL;
 }
 
-struct tcplay_info *
+struct vcplay_info *
 dm_info_map(const char *map_name)
 {
 	struct dm_task *dmt = NULL;
 	struct dm_info dmi[3];
-	struct tcplay_dm_table *dm_table[3];
+	struct vcplay_dm_table *dm_table[3];
 	struct tc_crypto_algo *crypto_algo;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	char map[PATH_MAX];
 	char ciphers[512];
 	int i, outermost = -1;
 
 	memset(dm_table, 0, sizeof(dm_table));
 
-	if ((info = (struct tcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
+	if ((info = (struct vcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
 		tc_log(1, "could not allocate safe info memory\n");
 		return NULL;
 	}
@@ -1742,7 +1873,7 @@ out:
 }
 
 int
-dm_setup(const char *mapname, struct tcplay_info *info)
+dm_setup(const char *mapname, struct vcplay_info *info)
 {
 	struct tc_cipher_chain *cipher_chain;
 	struct dm_task *dmt = NULL;
@@ -2086,19 +2217,17 @@ check_cipher_chain(const char *cipher_chain, int quiet)
 struct pbkdf_prf_algo *
 check_prf_algo(const char *algo, int sys, int quiet)
 {
-	int i, found = 0;
+	int i;
 
 	for (i = 0; pbkdf_prf_algos[i].name != NULL; i++) {
 		if (sys != pbkdf_prf_algos[i].sys)
 			continue;
 
-		if (strcmp(algo, pbkdf_prf_algos[i].name) == 0) {
-			found = 1;
-			break;
-		}
+		if (strcmp(algo, pbkdf_prf_algos[i].name) == 0)
+			return &pbkdf_prf_algos[i];
 	}
 
-	if (!found && !quiet) {
+	if (!quiet) {
 		fprintf(stderr, "Valid PBKDF PRF algorithms are: ");
 		for (i = 0; pbkdf_prf_algos[i].name != NULL; i++) {
 			if (sys != pbkdf_prf_algos[i].sys)
@@ -2106,14 +2235,13 @@ check_prf_algo(const char *algo, int sys, int quiet)
 			fprintf(stderr, "%s ", pbkdf_prf_algos[i].name);
 		}
 		fprintf(stderr, "\n");
-		return NULL;
 	}
 
-	return &pbkdf_prf_algos[i];
+	return NULL;
 }
 
 int
-tc_play_init(void)
+vc_play_init(void)
 {
 	int error;
 
@@ -2126,11 +2254,11 @@ tc_play_init(void)
 	return 0;
 }
 
-struct tcplay_opts *opts_init(void)
+struct vcplay_opts *opts_init(void)
 {
-	struct tcplay_opts *opts;
+	struct vcplay_opts *opts;
 
-	if ((opts = (struct tcplay_opts *)alloc_safe_mem(sizeof(*opts))) == NULL) {
+	if ((opts = (struct vcplay_opts *)alloc_safe_mem(sizeof(*opts))) == NULL) {
 		tc_log(1, "could not allocate safe opts memory\n");
 		return NULL;
 	}
@@ -2138,13 +2266,15 @@ struct tcplay_opts *opts_init(void)
 	memset(opts, 0, sizeof(*opts));
 
 	opts->retries = DEFAULT_RETRIES;
+	opts->h_pim = -1;
+	opts->new_pim = -1;
 	opts->secure_erase = 1;
 
 	return opts;
 }
 
 int
-opts_add_keyfile(struct tcplay_opts *opts, const char *keyfile)
+opts_add_keyfile(struct vcplay_opts *opts, const char *keyfile)
 {
 	const char *keyf;
 
@@ -2161,7 +2291,7 @@ opts_add_keyfile(struct tcplay_opts *opts, const char *keyfile)
 }
 
 int
-opts_add_keyfile_hidden(struct tcplay_opts *opts, const char *keyfile)
+opts_add_keyfile_hidden(struct vcplay_opts *opts, const char *keyfile)
 {
 	const char *keyf;
 
@@ -2178,7 +2308,7 @@ opts_add_keyfile_hidden(struct tcplay_opts *opts, const char *keyfile)
 }
 
 int
-opts_add_keyfile_new(struct tcplay_opts *opts, const char *keyfile)
+opts_add_keyfile_new(struct vcplay_opts *opts, const char *keyfile)
 {
 	const char *keyf;
 
@@ -2195,7 +2325,7 @@ opts_add_keyfile_new(struct tcplay_opts *opts, const char *keyfile)
 }
 
 void
-opts_clear_keyfile(struct tcplay_opts *opts)
+opts_clear_keyfile(struct vcplay_opts *opts)
 {
 	int i;
 
@@ -2207,7 +2337,7 @@ opts_clear_keyfile(struct tcplay_opts *opts)
 }
 
 void
-opts_clear_keyfile_hidden(struct tcplay_opts *opts)
+opts_clear_keyfile_hidden(struct vcplay_opts *opts)
 {
 	int i;
 
@@ -2220,7 +2350,7 @@ opts_clear_keyfile_hidden(struct tcplay_opts *opts)
 
 
 void
-opts_clear_keyfile_new(struct tcplay_opts *opts)
+opts_clear_keyfile_new(struct vcplay_opts *opts)
 {
 	int i;
 
@@ -2233,7 +2363,7 @@ opts_clear_keyfile_new(struct tcplay_opts *opts)
 
 
 void
-opts_free(struct tcplay_opts *opts)
+opts_free(struct vcplay_opts *opts)
 {
 	int i;
 

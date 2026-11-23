@@ -27,10 +27,10 @@
  * SUCH DAMAGE.
  */
 
-/* Version of tcplay specified during build (CMakeLists.txt, Makefile.classic) */
+/* Version of VCPlay specified during build (CMakeLists.txt, Makefile.classic) */
 
-#ifndef _TCPLAY_H
-#define _TCPLAY_H
+#ifndef _VCPLAY_H
+#define _VCPLAY_H
 
 #define MAX_BLKSZ		4096
 #define MAX_KEYSZ		192
@@ -38,14 +38,16 @@
 #define HDR_OFFSET_SYS		31744	/* 512 * (63 -1) */
 #define TC_SIG			"TRUE"
 #define VC_SIG			"VERA"
+#define VC_MIN_VER		0x0b01	/* 01 0b on disk, read as little-endian */
 #define MAX_PASSSZ		64
+#define MAX_PIM_VALUE		2147468	/* VeraCrypt limit for a signed 32-bit iteration count */
 #define PASS_BUFSZ		256
 #define KPOOL_SZ		64
 #define MAX_KFILE_SZ		1048576	/* 1 MB */
 #define MAX_KEYFILES		256
 #define HDR_OFFSET_HIDDEN	65536
-#define HDR_SIZE_LEGACY 512
-#define HDR_OFFSET_HIDDEN_LEGACY -(HDR_SIZE_LEGACY + HDR_SIZE_LEGACY * 2)
+#define HDR_SIZE_LEGACY		512
+#define HDR_OFFSET_HIDDEN_LEGACY	(3 * HDR_SIZE_LEGACY) /* from end of device */
 #define BACKUP_HDR_HIDDEN_OFFSET_END	65536
 #define BACKUP_HDR_OFFSET_END	131072
 #define SALT_LEN		64
@@ -148,11 +150,12 @@ struct tchdr_dec {
 	unsigned char	keys[256];
 } __attribute__((__packed__));
 
-struct tcplay_info {
+struct vcplay_info {
 	char dev[PATH_MAX];
 	struct tchdr_dec *hdr;
 	struct tc_cipher_chain *cipher_chain;
 	struct pbkdf_prf_algo *pbkdf_prf;
+	int iteration_count;
 	char key[MAX_KEYSZ*2 + 1];
 
 	int flags;
@@ -175,7 +178,7 @@ struct tcplay_info {
 #define INFO_TO_DM_BLOCKS(info, memb) \
     (((info)->memb * (uint64_t)((info)->blk_sz))/512)
 
-struct tcplay_dm_table {
+struct vcplay_dm_table {
 	char device[PATH_MAX];	/* Underlying device */
 	char target[256];	/* DM Target type */
 	off_t start;		/* Logical volume offset in table */
@@ -189,7 +192,7 @@ struct tcplay_dm_table {
 
 typedef int (*tc_state_change_fn)(void *, const char *, int);
 
-struct tcplay_opts {
+struct vcplay_opts {
 	/* (Mostly) common options */
 	const char	*dev;
 	const char	*keyfiles[MAX_KEYFILES];
@@ -202,6 +205,8 @@ struct tcplay_opts {
 	struct tc_cipher_chain	*h_cipher_chain;
 	const char	*passphrase;
 	const char	*h_passphrase;
+	int		pim;
+	int		h_pim;		/* -1 when omitted */
 	int		interactive;
 	int		weak_keys_and_salt;
 
@@ -225,6 +230,7 @@ struct tcplay_opts {
 	const char	*h_hdr_file_in;
 
 	/* Options for modify only */
+	int		new_pim;	/* -1 when omitted */
 	struct pbkdf_prf_algo	*new_prf_algo;
 	const char	*new_passphrase;
 	const char	*hdr_file_out;
@@ -236,14 +242,14 @@ struct tcplay_opts {
 };
 
 
-struct tcplay_opts *opts_init(void);
-int opts_add_keyfile(struct tcplay_opts *opts, const char *keyfile);
-int opts_add_keyfile_hidden(struct tcplay_opts *opts, const char *keyfile);
-int opts_add_keyfile_new(struct tcplay_opts *opts, const char *keyfile);
-void opts_free(struct tcplay_opts *opts);
-void opts_clear_keyfile(struct tcplay_opts *opts);
-void opts_clear_keyfile_hidden(struct tcplay_opts *opts);
-void opts_clear_keyfile_new(struct tcplay_opts *opts);
+struct vcplay_opts *opts_init(void);
+int opts_add_keyfile(struct vcplay_opts *opts, const char *keyfile);
+int opts_add_keyfile_hidden(struct vcplay_opts *opts, const char *keyfile);
+int opts_add_keyfile_new(struct vcplay_opts *opts, const char *keyfile);
+void opts_free(struct vcplay_opts *opts);
+void opts_clear_keyfile(struct vcplay_opts *opts);
+void opts_clear_keyfile_hidden(struct vcplay_opts *opts);
+void opts_clear_keyfile_new(struct vcplay_opts *opts);
 
 void *read_to_safe_mem(const char *file, off_t offset, size_t *sz);
 int get_random(unsigned char *buf, size_t len, int weak);
@@ -289,7 +295,7 @@ struct tchdr_dec *decrypt_hdr(struct tchdr_enc *ehdr,
     struct tc_cipher_chain *cipher_chain, unsigned char *key);
 int verify_hdr(struct tchdr_dec *hdr, struct pbkdf_prf_algo *prf_algo);
 struct tchdr_enc *copy_reencrypt_hdr(unsigned char *pass, int passlen,
-    struct pbkdf_prf_algo *prf_algo, int weak, struct tcplay_info *info,
+    struct pbkdf_prf_algo *prf_algo, int weak, struct vcplay_info *info,
     struct tchdr_enc **backup_hdr);
 
 void *_alloc_safe_mem(size_t req_sz, const char *file, int line);
@@ -301,27 +307,25 @@ struct tc_crypto_algo *check_cipher(const char *cipher, int quiet);
 struct tc_cipher_chain *check_cipher_chain(const char *cipher_chain, int quiet);
 struct pbkdf_prf_algo *check_prf_algo(const char *algo, int sys, int quiet);
 
-int tc_play_init(void);
+int vc_play_init(void);
 void tc_log(int err, const char *fmt, ...);
 int tc_cipher_chain_klen(struct tc_cipher_chain *chain);
 int tc_cipher_chain_length(struct tc_cipher_chain *chain);
 char *tc_cipher_chain_sprint(char *buf, size_t bufsz,
     struct tc_cipher_chain *chain);
-int free_info(struct tcplay_info *info);
-void print_info(struct tcplay_info *info);
-int adjust_info(struct tcplay_info *info, struct tcplay_info *hinfo);
-int process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
-    struct tchdr_enc *ehdr, struct tcplay_info **pinfo);
-int create_volume(struct tcplay_opts *opts);
-struct tcplay_info *info_map_common(struct tcplay_opts *opts,
+int free_info(struct vcplay_info *info);
+void print_info(struct vcplay_info *info);
+int adjust_info(struct vcplay_info *info, struct vcplay_info *hinfo);
+int create_volume(struct vcplay_opts *opts);
+struct vcplay_info *info_map_common(struct vcplay_opts *opts,
     char *passphrase_out);
-int info_mapped_volume(struct tcplay_opts *opts);
-int info_volume(struct tcplay_opts *opts);
-int map_volume(struct tcplay_opts *opts);
-int modify_volume(struct tcplay_opts *opts);
-int dm_setup(const char *mapname, struct tcplay_info *info);
+int info_mapped_volume(struct vcplay_opts *opts);
+int info_volume(struct vcplay_opts *opts);
+int map_volume(struct vcplay_opts *opts);
+int modify_volume(struct vcplay_opts *opts);
+int dm_setup(const char *mapname, struct vcplay_info *info);
 int dm_teardown(const char *mapname, const char *device);
-struct tcplay_info *dm_info_map(const char *map_name);
+struct vcplay_info *dm_info_map(const char *map_name);
 
 typedef void(*summary_fn_t)(void);
 
