@@ -57,7 +57,7 @@ struct sig_hdr_cfg {
 
 struct sig_hdr_cfg sig_hdr_cfgs[] = {
 	{ TC_SIG,	0x0007 },
-	{ VC_SIG,	0x0b01 },
+	{ VC_SIG,	VC_MIN_VER },
 	{ NULL,		0x0000 }
 };
 
@@ -317,10 +317,6 @@ struct tchdr_enc *copy_reencrypt_hdr(unsigned char *pass, int passlen,
 
 	key = key_backup = NULL;
 	ehdr = ehdr_backup = NULL;
-
-	/* By default stick to current PRF algo */
-	if (prf_algo == NULL)
-		prf_algo = info->pbkdf_prf;
 
 	if ((ehdr = (struct tchdr_enc *)alloc_safe_mem(sizeof(*ehdr))) == NULL) {
 		tc_log(1, "could not allocate safe ehdr memory\n");
