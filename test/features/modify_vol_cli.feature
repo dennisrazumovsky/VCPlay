@@ -9,15 +9,15 @@ Feature: Command line volume modification
     And I modify volume tmpvol1 using the following settings:
       | passphrase     | test             |
       | new_passphrase | new              |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | passphrase     | new              |
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | new              |
-    Then I expect tcplay to succeed
+    Then I expect vcplay to succeed
     And I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 19968   | aes-xts-plain64       | 256       | 256           |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 19968   | aes-xts-plain64       | 256       | 256           |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | SHA512            |
       | PBKDF2 iterations  | 1000              |
       | Cipher             | AES-256-XTS       |
@@ -36,15 +36,15 @@ Feature: Command line volume modification
       | passphrase     | test             |
       | new_passphrase | test             |
       | new_pbkdf_prf  | whirlpool        |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | passphrase     | test             |
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | test             |
-    Then I expect tcplay to succeed
+    Then I expect vcplay to succeed
     And I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 19968   | aes-xts-plain64       | 256       | 256           |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 19968   | aes-xts-plain64       | 256       | 256           |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | whirlpool         |
       | PBKDF2 iterations  | 1000              |
       | Cipher             | AES-256-XTS       |
@@ -62,15 +62,15 @@ Feature: Command line volume modification
     And I modify volume tmpvol1 using the following settings:
       | passphrase     | test             |
       | new_passphrase | new              |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | passphrase     | new              |
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | new              |
     Then I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test.0  | 0       | 19968   | serpent-xts-plain64   | 256       | 256           |
-      | tcplay_test    | 0       | 19968   | aes-xts-plain64       | 256       | 0             |
-    And I expect tcplay to report the following:
+      | vcplay_test.0  | 0       | 19968   | serpent-xts-plain64   | 256       | 256           |
+      | vcplay_test    | 0       | 19968   | aes-xts-plain64       | 256       | 0             |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | whirlpool                   |
       | PBKDF2 iterations  | 1000                        |
       | Cipher             | AES-256-XTS,SERPENT-256-XTS |
@@ -94,14 +94,14 @@ Feature: Command line volume modification
       | prompt_skipped | true              |
       | keyfiles       | key.2             |
       | new_passphrase | new_hidden        |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | passphrase     | test             |
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | test             |
     Then I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 19968   | twofish-xts-plain64   | 256       | 256           |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 19968   | twofish-xts-plain64   | 256       | 256           |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | whirlpool                   |
       | PBKDF2 iterations  | 1000                        |
       | Cipher             | TWOFISH-256-XTS             |
@@ -126,7 +126,7 @@ Feature: Command line volume modification
       | prompt_skipped | yes               |
       | new_passphrase | new_hidden        |
       | new_keyfiles   | key.1, key.2      |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | passphrase        | new_hidden     |
       | keyfiles          | key.1, key.2   |
     And I request information about volume tmpvol1 using the following settings:
@@ -134,8 +134,8 @@ Feature: Command line volume modification
       | keyfiles          | key.1, key.2   |
     Then I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 4096    | serpent-xts-plain64   | 16128     | 16128         |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 4096    | serpent-xts-plain64   | 16128     | 16128         |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | RIPEMD160                   |
       | PBKDF2 iterations  | 2000                        |
       | Cipher             | SERPENT-256-XTS             |
@@ -159,7 +159,7 @@ Feature: Command line volume modification
       | keyfiles       | key.2             |
       | new_keyfiles   | key.1, key.2      |
       | new_pbkdf_prf  | SHA512            |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | keyfiles          | key.1, key.2   |
       | prompt_skipped    | yes            |
     And I request information about volume tmpvol1 using the following settings:
@@ -167,8 +167,8 @@ Feature: Command line volume modification
       | prompt_skipped    | yes            |
     Then I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 4096    | serpent-xts-plain64   | 16128     | 16128         |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 4096    | serpent-xts-plain64   | 16128     | 16128         |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | SHA512                      |
       | PBKDF2 iterations  | 1000                        |
       | Cipher             | SERPENT-256-XTS             |
@@ -191,14 +191,14 @@ Feature: Command line volume modification
     And I corrupt sector 0 of volume tmpvol1
     And I modify volume tmpvol1 by restoring from the backup header using the following settings:
       | passphrase     | test             |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | passphrase     | test             |
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | test             |
     Then I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 19968   | twofish-xts-plain64   | 256       | 256           |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 19968   | twofish-xts-plain64   | 256       | 256           |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | whirlpool                   |
       | PBKDF2 iterations  | 1000                        |
       | Cipher             | TWOFISH-256-XTS             |
@@ -222,7 +222,7 @@ Feature: Command line volume modification
     And I modify volume tmpvol1 by restoring from the backup header using the following settings:
       | keyfiles          | key.2          |
       | prompt_skipped    | yes            |
-    And I map volume tmpvol1 as tcplay_test using the following settings:
+    And I map volume tmpvol1 as vcplay_test using the following settings:
       | keyfiles          | key.2          |
       | prompt_skipped    | yes            |
     And I request information about volume tmpvol1 using the following settings:
@@ -230,8 +230,8 @@ Feature: Command line volume modification
       | prompt_skipped    | yes            |
     Then I expect dmsetup to have the following tables:
       | name           | begin   | end     | algo                  | offset    | iv_offset     |
-      | tcplay_test    | 0       | 4096    | serpent-xts-plain64   | 16128     | 16128         |
-    And I expect tcplay to report the following:
+      | vcplay_test    | 0       | 4096    | serpent-xts-plain64   | 16128     | 16128         |
+    And I expect vcplay to report the following:
       | PBKDF2 PRF         | RIPEMD160                   |
       | PBKDF2 iterations  | 2000                        |
       | Cipher             | SERPENT-256-XTS             |
@@ -240,3 +240,91 @@ Feature: Command line volume modification
       | Volume size        | 4096 sectors                |
       | IV offset          | 16128 sectors               |
       | Block offset       | 16128 sectors               |
+
+  Scenario: Keep the VeraCrypt PIM when changing the passphrase, keyfiles and PRF
+    Given I create a volume tmpvol1 of size 10M with the following parameters:
+      | passphrase | test      |
+      | pbkdf_prf  | SHA512-VC |
+      | pim        | 7         |
+    When I modify volume tmpvol1 using the following settings:
+      | passphrase     | test      |
+      | pim            | 7         |
+      | new_passphrase | new       |
+      | new_keyfiles   | key.1     |
+      | new_pbkdf_prf  | SHA256-VC |
+    Then I expect vcplay to succeed
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | new   |
+      | keyfiles   | key.1 |
+      | pim        | 7     |
+    Then I expect vcplay to report the following:
+      | PBKDF2 PRF        | SHA256-VC |
+      | PBKDF2 iterations | 22000     |
+    When I corrupt sector 0 of volume tmpvol1
+    And I modify volume tmpvol1 by restoring from the backup header using the following settings:
+      | passphrase | new   |
+      | keyfiles   | key.1 |
+      | pim        | 7     |
+    Then I expect vcplay to succeed
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | new   |
+      | keyfiles   | key.1 |
+      | pim        | 7     |
+    Then I expect vcplay to report the following:
+      | PBKDF2 PRF        | SHA256-VC |
+      | PBKDF2 iterations | 22000     |
+
+  Scenario Outline: Change the VeraCrypt PIM and keep or replace the passphrase
+    Given I create a volume tmpvol1 of size 10M with the following parameters:
+      | passphrase | test  |
+      | keyfiles   | key.1 |
+      | pim        | 7     |
+    When I modify volume tmpvol1 using the following settings:
+      | passphrase     | test             |
+      | keyfiles       | key.1            |
+      | pim            | 7                |
+      | new_passphrase | <new_passphrase> |
+      | new_pim        | 13               |
+    Then I expect vcplay to succeed
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | <new_passphrase> |
+      | keyfiles   | key.1            |
+      | pim        | 7                |
+    Then I expect vcplay to fail
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | <new_passphrase> |
+      | keyfiles   | key.1            |
+      | pim        | 13               |
+    Then I expect vcplay to report the following:
+      | PBKDF2 iterations | 28000 |
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | <new_passphrase> |
+      | keyfiles   | key.1            |
+      | pim        | 13               |
+      | use_backup | yes              |
+    Then I expect vcplay to report the following:
+      | PBKDF2 iterations | 28000 |
+
+    Examples:
+      | new_passphrase |
+      | test           |
+      | changed        |
+
+  Scenario: Reject a new PIM on a TrueCrypt volume even when a VeraCrypt PRF is requested
+    Given I create a volume tmpvol1 of size 10M with the following parameters:
+      | passphrase | test   |
+      | pbkdf_prf  | SHA512 |
+    When I modify volume tmpvol1 using the following settings:
+      | passphrase    | test      |
+      | new_pbkdf_prf | SHA512-VC |
+      | new_pim       | 7         |
+    Then I expect vcplay to fail
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | test |
+    Then I expect vcplay to report the following:
+      | Signature | TRUE |
+    When I request information about volume tmpvol1 using the following settings:
+      | passphrase | test |
+      | use_backup | yes  |
+    Then I expect vcplay to report the following:
+      | Signature | TRUE |

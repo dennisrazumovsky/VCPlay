@@ -1,29 +1,29 @@
 require 'ffi'
 
-module TCplayLib
+module VCPlayLib
   extend FFI::Library
 
-  ffi_lib [ "#{ENV['BUILD_PATH'] || ".."}/libtcplay.so" ]
+  ffi_lib [ "#{ENV['BUILD_PATH'] || ".."}/libvcplay.so" ]
 
-  TC_OK  = 0
-  TC_ERR = -1
-  TC_ERR_UNIMPL = -255
+  VC_OK  = 0
+  VC_ERR = -1
+  VC_ERR_UNIMPL = -255
 
-  callback :tc_api_cipher_iterator_fn, [ :pointer, :string, :int, :int], :int
-  callback :tc_api_prf_iterator_fn, [ :pointer, :string], :int
+  callback :vc_api_cipher_iterator_fn, [ :pointer, :string, :int, :int], :int
+  callback :vc_api_prf_iterator_fn, [ :pointer, :string], :int
 
-  attach_function :tc_api_init, [ :int ], :int
-  attach_function :tc_api_uninit, [ ], :int
+  attach_function :vc_api_init, [ :int ], :int
+  attach_function :vc_api_uninit, [ ], :int
 
-  attach_function :tc_api_has, [ :string ], :int
-  attach_function :tc_api_cipher_iterate, [ :tc_api_cipher_iterator_fn, :pointer ], :int
-  attach_function :tc_api_prf_iterate, [ :tc_api_prf_iterator_fn, :pointer ], :int
+  attach_function :vc_api_has, [ :string ], :int
+  attach_function :vc_api_cipher_iterate, [ :vc_api_cipher_iterator_fn, :pointer ], :int
+  attach_function :vc_api_prf_iterate, [ :vc_api_prf_iterator_fn, :pointer ], :int
 
-  attach_function :tc_api_task_init, [ :string ], :pointer
-  attach_function :tc_api_task_uninit, [ :pointer ], :int
-  attach_function :tc_api_task_set, [ :pointer, :string, :varargs ], :int
-  attach_function :tc_api_task_do, [ :pointer ], :int
-  attach_function :tc_api_task_info_get, [ :pointer, :string, :varargs ], :int
+  attach_function :vc_api_task_init, [ :string ], :pointer
+  attach_function :vc_api_task_uninit, [ :pointer ], :int
+  attach_function :vc_api_task_set, [ :pointer, :string, :varargs ], :int
+  attach_function :vc_api_task_do, [ :pointer ], :int
+  attach_function :vc_api_task_info_get, [ :pointer, :string, :varargs ], :int
 end
 
 
