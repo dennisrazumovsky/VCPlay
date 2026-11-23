@@ -38,7 +38,7 @@
 #include <gcrypt.h>
 #pragma GCC diagnostic warning "-Wdeprecated-declarations"
 
-#include "tcplay.h"
+#include "vcplay.h"
 
 static
 int

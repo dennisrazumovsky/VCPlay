@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "tcplay.h"
+#include "vcplay.h"
 
 struct safe_mem_hdr {
 	struct safe_mem_hdr	*prev;

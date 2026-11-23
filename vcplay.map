@@ -1,0 +1,16 @@
+{
+global:
+	vc_api_init;
+	vc_api_uninit;
+	vc_api_has;
+	vc_api_cipher_iterate;
+	vc_api_prf_iterate;
+	vc_api_task_init;
+	vc_api_task_uninit;
+	vc_api_task_set;
+	vc_api_task_do;
+	vc_api_task_info_get;
+	vc_api_task_get_error;
+local:
+	*;
+};

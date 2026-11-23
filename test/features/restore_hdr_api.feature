@@ -10,13 +10,13 @@ Feature: Use header from file
   Scenario: Corrupted volume cannot be accessed
     Given I request information about volume tmpvol1 with the API using the following settings:
       | passphrase        | test     |
-    Then I expect tcplay to fail
+    Then I expect vcplay to fail
 
   Scenario: Access a volume with header file when all volume headers are corrupted
     Given I request information about volume tmpvol1 with the API using the following settings:
       | passphrase        | test        |
       | header_file       | tmpvol1_hdr |
-    Then I expect tcplay to report the following:
+    Then I expect vcplay to report the following:
       | Key Length         | 512 bits                    |
 
   Scenario: Restore volume headers from copy in file
@@ -24,5 +24,5 @@ Feature: Use header from file
       | passphrase        | test        |
     And I request information about volume tmpvol1 with the API using the following settings:
       | passphrase        | test        |
-    Then I expect tcplay to report the following:
+    Then I expect vcplay to report the following:
       | Key Length         | 512 bits                    |

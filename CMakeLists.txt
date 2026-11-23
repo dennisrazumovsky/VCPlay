@@ -1,13 +1,13 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 3.5)
 
-project (tcplay)
+project (VCPlay)
 set (VERSION_MAJOR 3)
 set (VERSION_MINOR 3)
 
 find_package (PkgConfig)
 include (CheckLibraryExists)
 
-set (SRCS_COMMON tcplay.c crc32.c safe_mem.c io.c hdr.c humanize.c crypto.c generic_xts.c)
+set (SRCS_COMMON vcplay.c crc32.c safe_mem.c io.c hdr.c humanize.c crypto.c generic_xts.c)
 set (SRCS_LINUX  crypto-gcrypt.c)
 
 set (CFLAGS_LINUX  "-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE")
@@ -81,56 +81,56 @@ if (NOT (DEFINED SBIN_DIR))
 endif()
 
 
-add_executable(tcplay-bin main.c ${SRCS_COMMON} ${SRCS_LINUX} ${SRCS_PBKDF})
-set_target_properties(tcplay-bin PROPERTIES OUTPUT_NAME tcplay)
-set_target_properties(tcplay-bin PROPERTIES COMPILE_FLAGS "${CFLAGS_COMMON} ${DEVMAPPER_CFLAGS} ${UUID_CFLAGS} ${GCRYPT_CFLAGS}")
-target_link_libraries(tcplay-bin ${DEVMAPPER_LDFLAGS} ${UUID_LDFLAGS} ${GCRYPT_LDFLAGS} ${LDFLAGS_PBKDF})
+add_executable(vcplay-bin main.c ${SRCS_COMMON} ${SRCS_LINUX} ${SRCS_PBKDF})
+set_target_properties(vcplay-bin PROPERTIES OUTPUT_NAME vcplay)
+set_target_properties(vcplay-bin PROPERTIES COMPILE_FLAGS "${CFLAGS_COMMON} ${DEVMAPPER_CFLAGS} ${UUID_CFLAGS} ${GCRYPT_CFLAGS}")
+target_link_libraries(vcplay-bin ${DEVMAPPER_LDFLAGS} ${UUID_LDFLAGS} ${GCRYPT_LDFLAGS} ${LDFLAGS_PBKDF})
 
 
-add_library(tcplay-so SHARED tcplay_api.c ${SRCS_COMMON} ${SRCS_LINUX} ${SRCS_PBKDF})
-set_target_properties(tcplay-so PROPERTIES OUTPUT_NAME tcplay)
-set_target_properties(tcplay-so PROPERTIES SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR})
-set_target_properties(tcplay-so PROPERTIES COMPILE_FLAGS "${CFLAGS_COMMON} ${DEVMAPPER_CFLAGS} ${UUID_CFLAGS} ${GCRYPT_CFLAGS}")
-set_target_properties(tcplay-so PROPERTIES LINK_FLAGS "-Wl,--version-script=${PROJECT_SOURCE_DIR}/tcplay.map")
+add_library(vcplay-so SHARED vcplay_api.c ${SRCS_COMMON} ${SRCS_LINUX} ${SRCS_PBKDF})
+set_target_properties(vcplay-so PROPERTIES OUTPUT_NAME vcplay)
+set_target_properties(vcplay-so PROPERTIES SOVERSION ${VERSION_MAJOR}.${VERSION_MINOR})
+set_target_properties(vcplay-so PROPERTIES COMPILE_FLAGS "${CFLAGS_COMMON} ${DEVMAPPER_CFLAGS} ${UUID_CFLAGS} ${GCRYPT_CFLAGS}")
+set_target_properties(vcplay-so PROPERTIES LINK_FLAGS "-Wl,--version-script=${PROJECT_SOURCE_DIR}/vcplay.map")
 # XXX: revist linking libraries against so. Seems to be more common practice nowadays
-target_link_libraries(tcplay-so ${DEVMAPPER_LDFLAGS} ${UUID_LDFLAGS} ${GCRYPT_LDFLAGS} ${LDFLAGS_PBKDF})
+target_link_libraries(vcplay-so ${DEVMAPPER_LDFLAGS} ${UUID_LDFLAGS} ${GCRYPT_LDFLAGS} ${LDFLAGS_PBKDF})
 
 
-add_library(tcplay-static STATIC tcplay_api.c ${SRCS_COMMON} ${SRCS_LINUX} ${SRCS_PBKDF})
-set_target_properties(tcplay-static PROPERTIES OUTPUT_NAME tcplay)
-set_target_properties(tcplay-static PROPERTIES VERSION ${VERSION_MAJOR}.${VERSION_MINOR})
-set_target_properties(tcplay-static PROPERTIES COMPILE_FLAGS "${CFLAGS_COMMON} ${DEVMAPPER_CFLAGS} ${UUID_CFLAGS} ${GCRYPT_CFLAGS}")
+add_library(vcplay-static STATIC vcplay_api.c ${SRCS_COMMON} ${SRCS_LINUX} ${SRCS_PBKDF})
+set_target_properties(vcplay-static PROPERTIES OUTPUT_NAME vcplay)
+set_target_properties(vcplay-static PROPERTIES VERSION ${VERSION_MAJOR}.${VERSION_MINOR})
+set_target_properties(vcplay-static PROPERTIES COMPILE_FLAGS "${CFLAGS_COMMON} ${DEVMAPPER_CFLAGS} ${UUID_CFLAGS} ${GCRYPT_CFLAGS}")
 
 
-# Generate pkg-config file tcplay.pc
-file(WRITE ${PROJECT_BINARY_DIR}/tcplay.pc "prefix=${CMAKE_INSTALL_PREFIX}
+# Generate pkg-config file vcplay.pc
+file(WRITE ${PROJECT_BINARY_DIR}/vcplay.pc "prefix=${CMAKE_INSTALL_PREFIX}
 exec_prefix=${CMAKE_INSTALL_PREFIX}
 libdir=${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}
 includedir=${CMAKE_INSTALL_PREFIX}/include
 
-Name: libtcplay
-Description: tcplay as a library
+Name: libvcplay
+Description: VCPlay library
 Version: ${VERSION_MAJOR}.${VERSION_MINOR}
 Requires.private: devmapper uuid
-Libs: -L\${libdir} -ltcplay
+Libs: -L\${libdir} -lvcplay
 Libs.private: -lgpg-error -lgcrypt
 Cflags: -I\${includedir}
 ")
 
 
 # Installation targets
-install(TARGETS tcplay-bin tcplay-static tcplay-so
+install(TARGETS vcplay-bin vcplay-static vcplay-so
 	RUNTIME DESTINATION ${SBIN_DIR}      COMPONENT bin
 	LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT lib
 	ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT lib-dev
 )
 
-install(FILES ${PROJECT_BINARY_DIR}/tcplay.pc DESTINATION lib${LIB_SUFFIX}/pkgconfig COMPONENT lib-dev)
+install(FILES ${PROJECT_BINARY_DIR}/vcplay.pc DESTINATION lib${LIB_SUFFIX}/pkgconfig COMPONENT lib-dev)
 
-install(FILES tcplay_api.h DESTINATION include        COMPONENT lib-dev)
-install(FILES tcplay.3     DESTINATION share/man/man3 COMPONENT lib-dev)
+install(FILES vcplay_api.h DESTINATION include        COMPONENT lib-dev)
+install(FILES vcplay.3     DESTINATION share/man/man3 COMPONENT lib-dev)
 
-install(FILES tcplay.8     DESTINATION share/man/man8 COMPONENT bin)
+install(FILES vcplay.8     DESTINATION share/man/man8 COMPONENT bin)
 
 
 
@@ -139,10 +139,10 @@ install(FILES tcplay.8     DESTINATION share/man/man8 COMPONENT bin)
 set (CPACK_RPM_COMPONENT_INSTALL 1)
 set (CPACK_DEB_COMPONENT_INSTALL 1)
 
-set (CPACK_PACKAGE_NAME "tcplay")
+set (CPACK_PACKAGE_NAME "vcplay")
 set (CPACK_PACKAGE_CONTACT "Alex Hornung <alex@alexhornung.com>")
 set (CPACK_PACKAGE_VENDOR  "Alex Hornung <alex@alexhornung.com>")
-set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "tcplay is a free (BSD-licensed), pretty much fully featured (including multiple keyfiles, cipher cascades, hidden volumes, etc) and stable TrueCrypt implementation.")
+set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "VCPlay provides command-line and library support for TrueCrypt and VeraCrypt volumes.")
 set (CPACK_PACAKGE_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}")
 set (CPACK_PACKAGE_VERSION_MAJOR "${VERSION_MAJOR}")
 set (CPACK_PACKAGE_VERSION_MINOR "${VERSION_MINOR}")

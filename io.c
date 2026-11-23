@@ -46,7 +46,7 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include "tcplay.h"
+#include "vcplay.h"
 
 void *
 read_to_safe_mem(const char *file, off_t offset, size_t *sz)

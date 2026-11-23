@@ -12,7 +12,7 @@ Feature: Save header to file
       | new_passphrase | new              |
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | test             |
-    Then I expect tcplay to fail
+    Then I expect vcplay to fail
 
   Scenario: Use saved header to access volume with changed passphrase
     Given I modify volume tmpvol1 by saving a header copy to tmpvol1_hdr using the following settings:
@@ -23,6 +23,6 @@ Feature: Save header to file
     And I request information about volume tmpvol1 using the following settings:
       | passphrase     | test             |
       | header_file    | tmpvol1_hdr      |
-    Then I expect tcplay to report the following:
+    Then I expect vcplay to report the following:
       | Key Length         | 512 bits                    |
       | Sector size        | 512                         |

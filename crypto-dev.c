@@ -38,7 +38,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "tcplay.h"
+#include "vcplay.h"
 
 static
 int
