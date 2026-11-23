@@ -45,6 +45,7 @@
 .Nm vc_api_task_get_error
 .Nd TrueCrypt volume management
 .Sh LIBRARY
+.ds doc-str-Lb-libvcplay TrueCrypt volume management (libvcplay, \-lvcplay)
 .Lb libvcplay
 .Sh SYNOPSIS
 .In vcplay_api.h
@@ -185,7 +186,7 @@ to 1.
 .Pp
 The
 .Fn vc_api_task_set
-function allows settting a number of different options for the current task.
+function allows setting a number of different options for the current task.
 The following table shows which keys are available on calls to
 .Fn vc_api_task_set
 for each of the operations.
@@ -599,7 +600,7 @@ to indicate that the operation completed successfully, or
 to indicate that the operation is not implemented
 , or
 .Dv VC_ERR
-to indicate that any other error occured.
+to indicate that any other error occurred.
 .Pp
 The
 .Fn vc_api_task_get_error
