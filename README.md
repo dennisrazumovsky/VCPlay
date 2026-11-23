@@ -198,4 +198,3 @@ Some notable differences between actual implementation and documentation:
    in the documentation.
  - All two-way cipher cascades are the wrong way round in the documentation,
    but all three-way cipher cascades are correct.
-

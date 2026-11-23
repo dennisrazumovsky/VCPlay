@@ -44,7 +44,7 @@
 #include "crc32.h"
 #include "vcplay.h"
 
-/* Endianess macros */
+/* Endianness macros */
 #define BE_TO_HOST(n, v) v = be ## n ## toh(v)
 #define LE_TO_HOST(n, v) v = le ## n ## toh(v)
 #define HOST_TO_BE(n, v) v = htobe ## n (v)

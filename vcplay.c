@@ -1982,7 +1982,7 @@ dm_setup(const char *mapname, struct vcplay_info *info)
 
 out:
 	/*
-	 * If an error occured, try to unroll changes made before it
+	 * If an error occurred, try to unroll changes made before it
 	 * happened.
 	 */
 	if (ret) {
