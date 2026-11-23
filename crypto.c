@@ -37,7 +37,7 @@
 #include <stdio.h>
 
 #include "crc32.h"
-#include "tcplay.h"
+#include "vcplay.h"
 
 int
 tc_cipher_chain_populate_keys(struct tc_cipher_chain *cipher_chain,

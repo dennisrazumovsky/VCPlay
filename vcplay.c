@@ -56,7 +56,7 @@
 #include <dirent.h>
 
 #include "crc32.h"
-#include "tcplay.h"
+#include "vcplay.h"
 #include "humanize.h"
 
 
@@ -316,7 +316,7 @@ print_hex(unsigned char *buf, off_t start, size_t len)
 #endif
 
 void
-print_info(struct tcplay_info *info)
+print_info(struct vcplay_info *info)
 {
 	printf("Device:\t\t\t%s\n", info->dev);
 
@@ -357,18 +357,18 @@ print_info(struct tcplay_info *info)
 }
 
 static
-struct tcplay_info *
+struct vcplay_info *
 new_info(const char *dev, int flags, struct tc_cipher_chain *cipher_chain,
     struct pbkdf_prf_algo *prf, struct tchdr_dec *hdr, off_t start)
 {
 	struct tc_cipher_chain *chain_start;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	int i;
 	int error;
 
 	chain_start = cipher_chain;
 
-	if ((info = (struct tcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
+	if ((info = (struct vcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
 		tc_log(1, "could not allocate safe info memory\n");
 		return NULL;
 	}
@@ -409,7 +409,7 @@ new_info(const char *dev, int flags, struct tc_cipher_chain *cipher_chain,
 }
 
 int
-free_info(struct tcplay_info *info)
+free_info(struct vcplay_info *info)
 {
 	if (info->cipher_chain)
 		tc_free_cipher_chain(info->cipher_chain);
@@ -422,7 +422,7 @@ free_info(struct tcplay_info *info)
 }
 
 int
-adjust_info(struct tcplay_info *info, struct tcplay_info *hinfo)
+adjust_info(struct vcplay_info *info, struct vcplay_info *hinfo)
 {
 	const struct tchdr_dec *outer = info->hdr;
 	const struct tchdr_dec *hidden = hinfo->hdr;
@@ -467,10 +467,10 @@ apply_pim(struct pbkdf_prf_algo *prf, int pim)
 
 static int
 process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
-    int pim, struct tchdr_enc *ehdr, struct tcplay_info **pinfo)
+    int pim, struct tchdr_enc *ehdr, struct vcplay_info **pinfo)
 {
 	struct tchdr_dec *dhdr;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	struct pbkdf_prf_algo prf;
 	struct tc_cipher_chain *cipher_chain = NULL;
 	unsigned char *key;
@@ -560,7 +560,7 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 }
 
 int
-create_volume(struct tcplay_opts *opts)
+create_volume(struct vcplay_opts *opts)
 {
 	char *pass, *pass_again;
 	char *h_pass = NULL;
@@ -910,11 +910,11 @@ out:
 	return ret;
 }
 
-struct tcplay_info *
-info_map_common(struct tcplay_opts *opts, char *passphrase_out)
+struct vcplay_info *
+info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 {
 	struct tchdr_enc *ehdr, *hehdr = NULL;
-	struct tcplay_info *info, *hinfo = NULL;
+	struct vcplay_info *info, *hinfo = NULL;
 	char *pass;
 	char *h_pass;
 	int error;
@@ -1179,9 +1179,9 @@ out:
 }
 
 int
-info_mapped_volume(struct tcplay_opts *opts)
+info_mapped_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 
 	info = dm_info_map(opts->map_name);
 	if (info != NULL) {
@@ -1201,9 +1201,9 @@ info_mapped_volume(struct tcplay_opts *opts)
 }
 
 int
-info_volume(struct tcplay_opts *opts)
+info_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 
 	info = info_map_common(opts, NULL);
 
@@ -1221,9 +1221,9 @@ info_volume(struct tcplay_opts *opts)
 }
 
 int
-map_volume(struct tcplay_opts *opts)
+map_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	int error;
 
 	info = info_map_common(opts, NULL);
@@ -1246,9 +1246,9 @@ map_volume(struct tcplay_opts *opts)
 }
 
 int
-modify_volume(struct tcplay_opts *opts)
+modify_volume(struct vcplay_opts *opts)
 {
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	struct tchdr_enc *ehdr, *ehdr_backup;
 	const char *new_passphrase = opts->new_passphrase;
 	const char **new_keyfiles = opts->new_keyfiles;
@@ -1535,10 +1535,10 @@ xlate_maj_min(const char *start_path, int max_depth, char *buf, size_t bufsz,
 #endif
 
 static
-struct tcplay_dm_table *
+struct vcplay_dm_table *
 dm_get_table(const char *name)
 {
-	struct tcplay_dm_table *tc_table;
+	struct vcplay_dm_table *tc_table;
 	struct dm_task *dmt = NULL;
 	void *next = NULL;
 	uint64_t start, length;
@@ -1548,7 +1548,7 @@ dm_get_table(const char *name)
 	int c = 0;
 	uint32_t maj, min;
 
-	if ((tc_table = (struct tcplay_dm_table *)alloc_safe_mem(sizeof(*tc_table))) == NULL) {
+	if ((tc_table = (struct vcplay_dm_table *)alloc_safe_mem(sizeof(*tc_table))) == NULL) {
 		tc_log(1, "could not allocate safe tc_table memory\n");
 		return NULL;
 	}
@@ -1641,21 +1641,21 @@ error:
 	return NULL;
 }
 
-struct tcplay_info *
+struct vcplay_info *
 dm_info_map(const char *map_name)
 {
 	struct dm_task *dmt = NULL;
 	struct dm_info dmi[3];
-	struct tcplay_dm_table *dm_table[3];
+	struct vcplay_dm_table *dm_table[3];
 	struct tc_crypto_algo *crypto_algo;
-	struct tcplay_info *info;
+	struct vcplay_info *info;
 	char map[PATH_MAX];
 	char ciphers[512];
 	int i, outermost = -1;
 
 	memset(dm_table, 0, sizeof(dm_table));
 
-	if ((info = (struct tcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
+	if ((info = (struct vcplay_info *)alloc_safe_mem(sizeof(*info))) == NULL) {
 		tc_log(1, "could not allocate safe info memory\n");
 		return NULL;
 	}
@@ -1785,7 +1785,7 @@ out:
 }
 
 int
-dm_setup(const char *mapname, struct tcplay_info *info)
+dm_setup(const char *mapname, struct vcplay_info *info)
 {
 	struct tc_cipher_chain *cipher_chain;
 	struct dm_task *dmt = NULL;
@@ -2153,7 +2153,7 @@ check_prf_algo(const char *algo, int sys, int quiet)
 }
 
 int
-tc_play_init(void)
+vc_play_init(void)
 {
 	int error;
 
@@ -2166,11 +2166,11 @@ tc_play_init(void)
 	return 0;
 }
 
-struct tcplay_opts *opts_init(void)
+struct vcplay_opts *opts_init(void)
 {
-	struct tcplay_opts *opts;
+	struct vcplay_opts *opts;
 
-	if ((opts = (struct tcplay_opts *)alloc_safe_mem(sizeof(*opts))) == NULL) {
+	if ((opts = (struct vcplay_opts *)alloc_safe_mem(sizeof(*opts))) == NULL) {
 		tc_log(1, "could not allocate safe opts memory\n");
 		return NULL;
 	}
@@ -2186,7 +2186,7 @@ struct tcplay_opts *opts_init(void)
 }
 
 int
-opts_add_keyfile(struct tcplay_opts *opts, const char *keyfile)
+opts_add_keyfile(struct vcplay_opts *opts, const char *keyfile)
 {
 	const char *keyf;
 
@@ -2203,7 +2203,7 @@ opts_add_keyfile(struct tcplay_opts *opts, const char *keyfile)
 }
 
 int
-opts_add_keyfile_hidden(struct tcplay_opts *opts, const char *keyfile)
+opts_add_keyfile_hidden(struct vcplay_opts *opts, const char *keyfile)
 {
 	const char *keyf;
 
@@ -2220,7 +2220,7 @@ opts_add_keyfile_hidden(struct tcplay_opts *opts, const char *keyfile)
 }
 
 int
-opts_add_keyfile_new(struct tcplay_opts *opts, const char *keyfile)
+opts_add_keyfile_new(struct vcplay_opts *opts, const char *keyfile)
 {
 	const char *keyf;
 
@@ -2237,7 +2237,7 @@ opts_add_keyfile_new(struct tcplay_opts *opts, const char *keyfile)
 }
 
 void
-opts_clear_keyfile(struct tcplay_opts *opts)
+opts_clear_keyfile(struct vcplay_opts *opts)
 {
 	int i;
 
@@ -2249,7 +2249,7 @@ opts_clear_keyfile(struct tcplay_opts *opts)
 }
 
 void
-opts_clear_keyfile_hidden(struct tcplay_opts *opts)
+opts_clear_keyfile_hidden(struct vcplay_opts *opts)
 {
 	int i;
 
@@ -2262,7 +2262,7 @@ opts_clear_keyfile_hidden(struct tcplay_opts *opts)
 
 
 void
-opts_clear_keyfile_new(struct tcplay_opts *opts)
+opts_clear_keyfile_new(struct vcplay_opts *opts)
 {
 	int i;
 
@@ -2275,7 +2275,7 @@ opts_clear_keyfile_new(struct tcplay_opts *opts)
 
 
 void
-opts_free(struct tcplay_opts *opts)
+opts_free(struct vcplay_opts *opts)
 {
 	int i;
 

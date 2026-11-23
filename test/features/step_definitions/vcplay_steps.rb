@@ -47,19 +47,19 @@ Given /^I map volume ([^\s]+) as ([^\s]+) using the following settings:$/ do |vo
   s['passphrase'] ||= ''
   s['passphrase_hidden'] ||= ''
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
     unless ParseHelper.is_yes(s['prompt_skipped'])
-      tcplay_io.expect /Passphrase/, 60 do
-        tcplay_io.write("#{s['passphrase']}\n")
+      vcplay_io.expect /Passphrase/, 60 do
+        vcplay_io.write("#{s['passphrase']}\n")
       end
     end
     if protect_hidden == true
-      tcplay_io.expect /Passphrase for hidden volume/, 60 do
-        tcplay_io.write("#{s['passphrase_hidden']}\n")
+      vcplay_io.expect /Passphrase for hidden volume/, 60 do
+        vcplay_io.write("#{s['passphrase_hidden']}\n")
       end
     end
-    tcplay_io.close_write
-    tcplay_io.read # Keep stdout open for tcplay's final status message.
+    vcplay_io.close_write
+    vcplay_io.read # Keep stdout open for vcplay's final status message.
   end
 
   @error = ($? != 0)
@@ -101,32 +101,32 @@ Given /^I create a volume ([^\s]+) of size (\d+)M with the following parameters:
 
   @files_to_delete << "volumes/#{vol}"
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
-    next unless tcplay_io.expect(/Passphrase/, 10)
-    tcplay_io.write("#{s['passphrase']}\n")
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
+    next unless vcplay_io.expect(/Passphrase/, 10)
+    vcplay_io.write("#{s['passphrase']}\n")
 
-    tcplay_io.expect /Repeat/, 10 do
-      tcplay_io.write("#{s['passphrase']}\n")
+    vcplay_io.expect /Repeat/, 10 do
+      vcplay_io.write("#{s['passphrase']}\n")
     end
 
     if create_hidden == true
-      tcplay_io.expect /Passphrase for hidden volume/, 10 do
-        tcplay_io.write("#{s['passphrase_hidden']}\n")
+      vcplay_io.expect /Passphrase for hidden volume/, 10 do
+        vcplay_io.write("#{s['passphrase_hidden']}\n")
       end
 
-      tcplay_io.expect /Repeat/, 10 do
-        tcplay_io.write("#{s['passphrase_hidden']}\n")
+      vcplay_io.expect /Repeat/, 10 do
+        vcplay_io.write("#{s['passphrase_hidden']}\n")
       end
 
-      tcplay_io.expect /Size of hidden volume/, 10 do
-        tcplay_io.write("#{s['hidden_mb']}M\n")
+      vcplay_io.expect /Size of hidden volume/, 10 do
+        vcplay_io.write("#{s['hidden_mb']}M\n")
       end
     end
-    tcplay_io.expect /Are you sure/, 10 do
-      tcplay_io.write("y\n")
+    vcplay_io.expect /Are you sure/, 10 do
+      vcplay_io.write("y\n")
     end
-    tcplay_io.close_write
-    tcplay_io.read
+    vcplay_io.close_write
+    vcplay_io.read
   end
   @error = ($? != 0)
 end
@@ -162,18 +162,18 @@ Given /^I request information about volume ([^\s]+) using the following settings
 
   @info = {}
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
     unless ParseHelper.is_yes(s['prompt_skipped'])
-      tcplay_io.expect /Passphrase:/, 60 do
-        tcplay_io.write("#{s['passphrase']}\n")
+      vcplay_io.expect /Passphrase:/, 60 do
+        vcplay_io.write("#{s['passphrase']}\n")
       end
     end
     if protect_hidden == true
-      tcplay_io.expect /Passphrase for hidden volume:/, 60 do
-        tcplay_io.write("#{s['passphrase_hidden']}\n")
+      vcplay_io.expect /Passphrase for hidden volume:/, 60 do
+        vcplay_io.write("#{s['passphrase_hidden']}\n")
       end
     end
-    tcplay_io.each do |line|
+    vcplay_io.each do |line|
       line.match(/^(.*):\s+(.*)$/) do |m|
         c = m.captures
         @info[c[0].downcase.strip] = c[1].downcase
@@ -191,8 +191,8 @@ Given /^I request information about mapped volume ([^\s]+)$/ do |map|
 
   @info = {}
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
-    tcplay_io.each do |line|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
+    vcplay_io.each do |line|
       line.match(/^(.*):\s+(.*)$/) do |m|
         c = m.captures
         @info[c[0].downcase.strip] = c[1].downcase
@@ -226,22 +226,22 @@ Given /^I modify volume ([^\s]+) using the following settings:$/ do |vol,setting
   s['new_passphrase'] ||= ''
   new_passphrase_prompt = nil
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
     unless ParseHelper.is_yes(s['prompt_skipped'])
-      tcplay_io.expect /Passphrase:/, 60 do
-        tcplay_io.write("#{s['passphrase']}\n")
+      vcplay_io.expect /Passphrase:/, 60 do
+        vcplay_io.write("#{s['passphrase']}\n")
       end
     end
 
-    new_passphrase_prompt = tcplay_io.expect(/New passphrase:/, 60)
+    new_passphrase_prompt = vcplay_io.expect(/New passphrase:/, 60)
     if new_passphrase_prompt
-      tcplay_io.write("#{s['new_passphrase']}\n")
+      vcplay_io.write("#{s['new_passphrase']}\n")
 
-      tcplay_io.expect(/Repeat passphrase:/, 10).should_not be_nil
-      tcplay_io.write("#{s['new_passphrase']}\n")
+      vcplay_io.expect(/Repeat passphrase:/, 10).should_not be_nil
+      vcplay_io.write("#{s['new_passphrase']}\n")
     end
-    tcplay_io.close_write
-    tcplay_io.read
+    vcplay_io.close_write
+    vcplay_io.read
   end
   @error = ($? != 0)
   new_passphrase_prompt.should_not be_nil unless @error
@@ -265,14 +265,14 @@ Given /^I modify volume ([^\s]+) by restoring from the backup header using the f
 
   s['passphrase'] ||= ''
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
     unless ParseHelper.is_yes(s['prompt_skipped'])
-      tcplay_io.expect /Passphrase:/, 60 do
-        tcplay_io.write("#{s['passphrase']}\n")
+      vcplay_io.expect /Passphrase:/, 60 do
+        vcplay_io.write("#{s['passphrase']}\n")
       end
     end
-    tcplay_io.close_write
-    tcplay_io.read
+    vcplay_io.close_write
+    vcplay_io.read
   end
   @error = ($? != 0)
 end
@@ -294,19 +294,19 @@ Given(/^I modify volume ([^\s]+) by saving a header copy to ([^\s]+) using the f
   s['passphrase'] ||= ''
   s['new_passphrase'] ||= s['passphrase']
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
     unless ParseHelper.is_yes(s['prompt_skipped'])
-      tcplay_io.expect /Passphrase:/, 60 do
-        tcplay_io.write("#{s['passphrase']}\n")
+      vcplay_io.expect /Passphrase:/, 60 do
+        vcplay_io.write("#{s['passphrase']}\n")
       end
     end
 
-    tcplay_io.expect /New passphrase/, 60 do
-      tcplay_io.write("#{s['new_passphrase']}\n")
+    vcplay_io.expect /New passphrase/, 60 do
+      vcplay_io.write("#{s['new_passphrase']}\n")
     end
 
-    tcplay_io.expect /Repeat/, 10 do
-      tcplay_io.write("#{s['new_passphrase']}\n")
+    vcplay_io.expect /Repeat/, 10 do
+      vcplay_io.write("#{s['new_passphrase']}\n")
     end
   end
   @error = ($? != 0)
@@ -329,19 +329,19 @@ Given(/^I modify volume ([^\s]+) by restoring from header copy ([^\s]+) using th
   s['passphrase'] ||= ''
   s['new_passphrase'] ||= s['passphrase']
 
-  IO.popen("#{@tcplay} #{@args.join(' ')}", mode='r+') do |tcplay_io|
+  IO.popen("#{@vcplay} #{@args.join(' ')}", mode='r+') do |vcplay_io|
     unless ParseHelper.is_yes(s['prompt_skipped'])
-      tcplay_io.expect /Passphrase:/, 60 do
-        tcplay_io.write("#{s['passphrase']}\n")
+      vcplay_io.expect /Passphrase:/, 60 do
+        vcplay_io.write("#{s['passphrase']}\n")
       end
     end
 
-    tcplay_io.expect /New passphrase/, 60 do
-      tcplay_io.write("#{s['new_passphrase']}\n")
+    vcplay_io.expect /New passphrase/, 60 do
+      vcplay_io.write("#{s['new_passphrase']}\n")
     end
 
-    tcplay_io.expect /Repeat/, 10 do
-      tcplay_io.write("#{s['new_passphrase']}\n")
+    vcplay_io.expect /Repeat/, 10 do
+      vcplay_io.write("#{s['new_passphrase']}\n")
     end
   end
   @error = ($? != 0)
@@ -358,7 +358,7 @@ Then /^I expect no mapping named (\S+)$/ do |map|
 end
 
 
-Then /^I expect tcplay to report the following:$/ do |expected_info|
+Then /^I expect vcplay to report the following:$/ do |expected_info|
   expected_info.rows_hash.each_pair do |k,v|
     @info[k.downcase.strip].should == v.downcase
   end
@@ -386,11 +386,11 @@ Then %r{^I expect valid checksums in both AES-256-XTS/SHA512-VC headers of volum
   end
 end
 
-Then /^I expect tcplay to succeed$/ do
+Then /^I expect vcplay to succeed$/ do
   @error.should == false
 end
 
-Then /^I expect tcplay to fail$/ do
+Then /^I expect vcplay to fail$/ do
   @error.should == true
 end
 
@@ -406,7 +406,7 @@ end
 
 
 Before do
-  @tcplay = "#{ENV['BUILD_PATH'] || ".."}/tcplay"
+  @vcplay = "#{ENV['BUILD_PATH'] || ".."}/vcplay"
   @maps = []
   @mappings = []
   @info = {}
@@ -416,7 +416,7 @@ end
 
 
 After('@cmdline') do
-  @mappings.each { |m| IO.popen("#{@tcplay} -u #{m}") { |io| Process.wait(io.pid) } }
+  @mappings.each { |m| IO.popen("#{@vcplay} -u #{m}") { |io| Process.wait(io.pid) } }
   @losetup.detach_all
 
   @files_to_delete.each { |f| File.unlink(f) }
