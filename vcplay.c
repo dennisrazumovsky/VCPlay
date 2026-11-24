@@ -1106,7 +1106,7 @@ info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 		/* We need both to protect a hidden volume */
 		if (error || (opts->protect_hidden && hinfo == NULL)) {
 			if (!try_empty)
-				tc_log(1, "Incorrect password or not a TrueCrypt volume\n");
+				tc_log(1, "Incorrect password or unencrypted volume\n");
 
 			if (info) {
 				free_info(info);
