@@ -466,8 +466,50 @@ apply_pim(struct pbkdf_prf_algo *prf, int pim)
 }
 
 static int
-process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
-    int pim, struct tchdr_enc *ehdr, struct vcplay_info **pinfo)
+is_legacy_volume(const struct tchdr_dec *hdr)
+{
+	/* tc_min_ver is read little-endian, with the major version in its low byte. */
+	return memcmp(hdr->tc_str, TC_SIG, sizeof(hdr->tc_str)) == 0 &&
+	    (hdr->tc_min_ver & 0xff) < 6;
+}
+
+static int
+prepare_volume_layout(struct tchdr_dec *hdr, int flags, uint64_t device_size,
+    int legacy_hidden)
+{
+	uint64_t hidden_header_offset;
+
+	if (!is_legacy_volume(hdr) || (flags & (TC_FLAG_SYS | TC_FLAG_FDE)))
+		return !legacy_hidden;
+
+	if (device_size < HDR_SIZE_LEGACY + HDR_OFFSET_HIDDEN_LEGACY ||
+	    hdr->sec_sz != HDR_SIZE_LEGACY)
+		return 0;
+
+	/*
+	 * Layout v1 places normal data after the first header and hidden
+	 * data immediately before the hidden header near the end of the device.
+	 */
+	if (hdr->sz_hidvol == 0) {
+		if (legacy_hidden)
+			return 0;
+		hdr->off_mk_scope = HDR_SIZE_LEGACY;
+		hdr->sz_mk_scope = device_size - HDR_SIZE_LEGACY;
+	} else {
+		hidden_header_offset = device_size - HDR_OFFSET_HIDDEN_LEGACY;
+		if (hdr->sz_hidvol > hidden_header_offset - HDR_SIZE_LEGACY ||
+		    hdr->sz_hidvol % HDR_SIZE_LEGACY != 0)
+			return 0;
+		hdr->off_mk_scope = hidden_header_offset - hdr->sz_hidvol;
+		hdr->sz_mk_scope = hdr->sz_hidvol;
+	}
+	return 1;
+}
+
+static int
+process_hdr(const struct vcplay_opts *opts, uint64_t device_size,
+    unsigned char *pass, int passlen, int pim, int legacy_hidden,
+    struct tchdr_enc *ehdr, struct vcplay_info **pinfo)
 {
 	struct tchdr_dec *dhdr;
 	struct vcplay_info *info;
@@ -487,6 +529,8 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 	found = 0;
 	for (i = 0; !found && pbkdf_prf_algos[i].name != NULL; i++) {
 		prf = pbkdf_prf_algos[i];
+		if (legacy_hidden && strcmp(prf.sig, TC_SIG) != 0)
+			continue;
 		if (apply_pim(&prf, pim) != 0)
 			continue;
 #ifdef DEBUG
@@ -523,7 +567,8 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 				return EINVAL;
 			}
 
-			if (verify_hdr(dhdr, &prf)) {
+			if (verify_hdr(dhdr, &prf) && prepare_volume_layout(dhdr,
+			    opts->flags, device_size, legacy_hidden)) {
 #ifdef DEBUG
 				printf("tc_str: %.4s, tc_ver: %d, tc_min_ver: %d, "
 				    "crc_keys: %d, sz_vol: %"PRIu64", "
@@ -547,7 +592,7 @@ process_hdr(const char *dev, int flags, unsigned char *pass, int passlen,
 	if (!found)
 		return EINVAL;
 
-	if ((info = new_info(dev, flags, cipher_chain,
+	if ((info = new_info(opts->dev, opts->flags, cipher_chain,
 	    &pbkdf_prf_algos[i-1], dhdr, 0)) == NULL) {
 		free_safe_mem(dhdr);
 		return ENOMEM;
@@ -910,6 +955,42 @@ out:
 	return ret;
 }
 
+static int
+process_hidden_hdr(const struct vcplay_opts *opts, uint64_t device_size,
+    size_t blksz, struct tchdr_enc *hehdr, char *pass,
+    const struct vcplay_info *outer, struct vcplay_info **pinfo)
+{
+	int pim = opts->protect_hidden ? opts->h_pim : opts->pim;
+	int nkeyfiles = opts->protect_hidden ? opts->n_hkeyfiles : opts->nkeyfiles;
+	int passlen = nkeyfiles > 0 ? MAX_PASSSZ : strlen(pass);
+	int try_legacy = blksz == HDR_SIZE_LEGACY && pim <= 0 &&
+	    (outer == NULL || is_legacy_volume(outer->hdr)) &&
+	    !(opts->flags & (TC_FLAG_BACKUP | TC_FLAG_H_HDR_FROM_FILE |
+	    TC_FLAG_SYS | TC_FLAG_FDE));
+	struct tchdr_enc *legacy_hdr;
+	size_t sz = sizeof(*legacy_hdr);
+	int error = EINVAL;
+
+	/*
+	 * An open outer volume identifies the layout. With only the hidden
+	 * password, try the current layout before the old one.
+	 */
+	if (hehdr != NULL && (outer == NULL || !try_legacy))
+		error = process_hdr(opts, device_size, (unsigned char *)pass, passlen,
+		    pim, 0, hehdr, pinfo);
+	if (error != EINVAL || !try_legacy)
+		return error;
+
+	legacy_hdr = read_to_safe_mem(opts->dev, -HDR_OFFSET_HIDDEN_LEGACY, &sz);
+	if (legacy_hdr == NULL)
+		return EIO;
+	if (sz == sizeof(*legacy_hdr))
+		error = process_hdr(opts, device_size, (unsigned char *)pass, passlen,
+		    pim, 1, legacy_hdr, pinfo);
+	free_safe_mem(legacy_hdr);
+	return error;
+}
+
 struct vcplay_info *
 info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 {
@@ -921,6 +1002,7 @@ info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 	size_t sz;
 	size_t blksz;
 	disksz_t blocks;
+	uint64_t device_size;
 	int is_hidden = 0;
 	int try_empty = 0;
 	int retries;
@@ -940,6 +1022,7 @@ info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 		tc_log(1, "could not get disk information\n");
 		return NULL;
 	}
+	device_size = blocks * blksz;
 
 	if (opts->retries < 1)
 		retries = 1;
@@ -1070,7 +1153,8 @@ info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 					tc_log(1, "error read hdr_enc: %s", opts->h_hdr_file_in);
 					goto out;
 				}
-			} else {
+			} else if (TC_FLAG_SET(opts->flags, BACKUP) ||
+			    device_size >= HDR_OFFSET_HIDDEN + sizeof(*hehdr)) {
 				hehdr = (struct tchdr_enc *)read_to_safe_mem(opts->dev,
 				    (!TC_FLAG_SET(opts->flags, BACKUP)) ? HDR_OFFSET_HIDDEN :
 				    -BACKUP_HDR_HIDDEN_OFFSET_END, &sz);
@@ -1083,24 +1167,22 @@ info_map_common(struct vcplay_opts *opts, char *passphrase_out)
 			hehdr = NULL;
 		}
 
-		error = process_hdr(opts->dev, opts->flags, (unsigned char *)pass,
+		error = process_hdr(opts, device_size, (unsigned char *)pass,
 		    (opts->nkeyfiles > 0)?MAX_PASSSZ:strlen(pass),
-		    opts->pim, ehdr, &info);
+		    opts->pim, 0, ehdr, &info);
 
 		/*
 		 * Try to process hidden header if we have to protect the hidden
 		 * volume, or the decryption/verification of the main header
 		 * failed.
 		 */
-		if (hehdr && error && !opts->protect_hidden) {
-			error = process_hdr(opts->dev, opts->flags, (unsigned char *)pass,
-			    (opts->nkeyfiles > 0)?MAX_PASSSZ:strlen(pass),
-			    opts->pim, hehdr, &info);
+		if (error && !opts->protect_hidden) {
+			error = process_hidden_hdr(opts, device_size, blksz, hehdr,
+			    pass, NULL, &info);
 			is_hidden = !error;
-		} else if (hehdr && !error && opts->protect_hidden) {
-			error = process_hdr(opts->dev, opts->flags, (unsigned char *)h_pass,
-			    (opts->n_hkeyfiles > 0)?MAX_PASSSZ:strlen(h_pass),
-			    opts->h_pim, hehdr, &hinfo);
+		} else if (!error && opts->protect_hidden) {
+			error = process_hidden_hdr(opts, device_size, blksz, hehdr,
+			    h_pass, info, &hinfo);
 		}
 
 		/* We need both to protect a hidden volume */
@@ -1293,6 +1375,12 @@ modify_volume(struct vcplay_opts *opts)
 	info = info_map_common(opts, pass);
 	if (info == NULL)
 		goto out;
+
+	if (is_legacy_volume(info->hdr)) {
+		tc_log(1, "Changing headers on TrueCrypt volumes created before 6.0 is not supported\n");
+		errno = EINVAL;
+		goto out;
+	}
 
 	if (change_pim && (!supports_pim(info->pbkdf_prf) || info->hdr->tc_min_ver != VC_MIN_VER)) {
 		tc_log(1, "Changing the PIM requires a VeraCrypt volume with primary and backup headers\n");
